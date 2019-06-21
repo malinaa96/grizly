@@ -10,8 +10,7 @@ q = QFrame(schema='sales_schema', table='sales_table').from_dict(columns)
 q['FY18_Orders'] = {'type':'num'} #add new column
 
 q.groupby(['Country'])['FY18_Sales', 'FY19_Sales'].agg('sum')
-q[((q['Country'] != 'France')
-  & (q['Year'] != 2016))]
+q[((q['Country'] != 'France') & (q['Year'] != 2016))]
 sql(q)
 ```
 Which will generate this SQL:
