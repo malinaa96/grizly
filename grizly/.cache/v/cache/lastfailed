@@ -1,0 +1,12 @@
+{
+  "tests/test_to_sql.py.6b1f386f8d2960ebd335083ec5a528e4.py": true,
+  "tests/test_to_sql.py::test_assign": true,
+  "tests/test_to_sql.py::test_field_calculations": true,
+  "tests/test_to_sql.py::test_join": true,
+  "tests/test_to_sql.py::test_limit": true,
+  "tests/test_to_sql.py::test_query": true,
+  "tests/test_to_sql.py::test_query_with_group_by": true,
+  "tests/test_to_sql.py::test_read_excel": true,
+  "tests/test_to_sql.py::test_rename_fields": true,
+  "tests/test_to_sql.py::test_union": true
+}
