@@ -106,7 +106,10 @@ def get_sql2(qf):
     sql = "SELECT {}".format(sel_cols_str)
     if "sql" not in data:
         if "schema" in data:
-            sql += " FROM {}.{} ".format(data["schema"], data["table"])
+            if data["schema"] != "":
+                sql += " FROM {}.{} ".format(data["schema"], data["table"])
+            else:
+                sql += " FROM {} ".format(data["table"])
         else:
             sql += " FROM {} ".format(data["table"])
     else:
@@ -114,7 +117,8 @@ def get_sql2(qf):
 
     if "where" in data:
         sql += " WHERE {}".format(data["where"])
-    sql += " GROUP BY {}".format(group_cols_str)
+    if group_cols_str != "":
+        sql += " GROUP BY {}".format(group_cols_str)
     if "limit" in data:
         sql += " LIMIT {}".format(str(data["limit"]))
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")

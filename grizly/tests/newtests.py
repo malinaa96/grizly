@@ -6,7 +6,7 @@ from ..io.sqlbuilder import get_sql2, write
 
 def write_out(out):
     with open(
-        "C:\\Users\\eg013949\\Documents\\PythonP\\grizly\\grizly\\tests\\output.sql",
+        "C:\\Users\\eg013949\\Documents\\PythonP\\grizly_dev\\grizly\\tests\\output.sql",
         "w",
     ) as f:
         f.write(out)
@@ -213,6 +213,16 @@ def test_write_sql_table():
         "table": "Orders",
     }
     q = QFrame().from_dict(orders)
-    sql = write(q, "Orders", drop=True)
-    write_out(sql)
+    #sql = write(q, "Orders", drop=True)
 
+def test_to_sql():
+    q = QFrame().read_excel(
+        "C:\\Users\\eg013949\\Documents\\PythonP\\grizly_dev\\grizly\\tests\\tables.xlsx",
+        sheet_name="cb_invoices",
+    )
+    engine = 'sqlite:///C:\\Users\\eg013949\\Documents\\PythonP\\grizly_dev\\grizly\\tests\\chinook.db'
+    q.assign(sales="Quantity*UnitPrice")
+    q.groupby(["TrackId"])[("Quantity")].agg("sum")
+    sql = q.get_sql
+    df = q.to_sql(engine_string=engine)
+    write_out(df.to_string())

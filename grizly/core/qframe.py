@@ -73,10 +73,11 @@ class QFrame:
 
     def read_excel(self, excel_path, sheet_name=""):
         schema, table, columns_qf = read_excel(excel_path, sheet_name)
-        self.data["fields"] = columns_qf
-        self.data["schema"] = schema
-        self.data["table"] = table
-        return self
+        data = {}
+        data["fields"] = columns_qf
+        data["schema"] = schema
+        data["table"] = table
+        return QFrame(data=data)
 
     def query(self, query):
         """
@@ -152,6 +153,12 @@ class QFrame:
         self.data["limit"] = str(limit)
         return self
 
+    def select(self):
+        """
+        Creates a subquery that looks like select col1, col2 from (some sql)
+        """
+        sql = get_sql()
+
     def rename(self, fields):
         for field in fields:
             self.data["fields"][field]["as"] = fields[field]
@@ -187,59 +194,10 @@ class QFrame:
         return sql
 
     def __getitem__(self, getfields):
+        self.getfields = []
         self.getfields.append(getfields)
         return self
 
-    def __setitem__(self, key, value):
-        d = {}
-        d[key] = {}
-        if isinstance(value, QFrame):
-            value = value.expr
-            d[key]["expr"] = value
-            d[key]["type"] = "num"
-        if isinstance(value, dict):
-            d[key] = value
-        self.fields = d
-        return QFrame(schema=self.schema, table=self.table, fields=self.fields)
-
-    def __add__(self, other):
-        if isinstance(self.getfields, str):
-            a = self.table + "." + self.getfields
-        else:
-            a = ""
-        if isinstance(other, int):
-            b = str(other)
-        else:
-            b = self.table + "." + other.getfields
-            print(b)
-        if self.expr == "":
-            expr = a + " + " + b
-        else:
-            expr = self.expr + " + " + b
-        return QFrame(expr=expr, table=self.table)
-
-    def __sub__(self, other):
-        if isinstance(self.getfields, str):
-            a = self.table + "." + self.getfields
-        else:
-            a = ""
-        if isinstance(other, int):
-            b = str(other)
-        else:
-            b = self.table + "." + other.getfields
-        if self.expr == "":
-            expr = a + " - " + b
-        else:
-            expr = self.expr + " - " + b
-        return QFrame(expr=expr, table=self.table)
-
-    def __truediv__(self, other):
-        expr = "(" + self.expr + ") / " + other.column
-        return QFrame(expr=expr)
-
-    def __mul__(self, other):
-        expr = "(" + self.expr + ") * " + other.column
-        return QFrame(expr=expr)
 
 
 def join(l_q, r_q, on, l_table="l_table", r_table="r_table"):
