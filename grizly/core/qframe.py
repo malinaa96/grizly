@@ -52,24 +52,29 @@ class QFrame:
     def __init__(self, data={}, getfields=[]):
         self.data = data
         self.getfields = getfields  # remove this and put in data
-        self.fieldattrs = ["type", "group_by", "expr"]
+        self.fieldattrs = ["type","as","group_by"]
+        self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
 
     def validate_data(self, data):
         # validating fields, need to validate other stuff too
-        inpdata = set([list(data["fields"][k])[0] for k in data["fields"].keys()])
-        if inpdata <= set(self.fieldattrs):
-            return True
-        else:
-            raise ValueError("stuff is not in content")
+
+        for field_key in data['fields']:
+            for key_attr in data['fields'][field_key]:
+                if key_attr not in set(self.fieldattrs):
+                    raise AttributeError("Your columns have invalid attributes.")
+
+        for field_key in data["fields"]:
+            if "type" in data["fields"][field_key]:
+               if data["fields"][field_key]["type"] not in self.fieldtypes:
+                    raise ValueError("Your columns have invalid types.")
+            else:
+                raise KeyError("Some of your columns don't have types.")
 
     def from_dict(self, data):
-        try:
-            self.validate_data(data)
-            self.data = data
-            return self
-        except ValueError:
-            print("Your columns do not have the right types")
+        self.validate_data(data)
+        self.data = data
+        return self
 
     def read_excel(self, excel_path, sheet_name=""):
         schema, table, columns_qf = read_excel(excel_path, sheet_name)
