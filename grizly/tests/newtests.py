@@ -6,7 +6,7 @@ from ..io.sqlbuilder import get_sql2, write
 
 def write_out(out):
     with open(
-        "C:\\Users\\eg013949\\Documents\\PythonP\\grizly_dev\\grizly\\tests\\output.sql",
+        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\output.sql",
         "w",
     ) as f:
         f.write(out)
@@ -42,10 +42,30 @@ def test_from_dict():
 
     assert q.data["fields"]["Country"] == {"type": "dim", "as": "Country"}
 
+def test_from_dict_2():
+    customers = {
+        "fields": {
+            "Country": {"type": "dim", "as": "Country"},
+            "Customer": {"type": "dim", "as": "Customer"},
+        }
+    }
+    orders = {
+        "fields": {
+            "Order": {"type": "dim", "as": "Bookings"},
+            "Part": {"type": "dim", "as": "Part"},
+            "Customer": {"type": "dim", "as": "Customer"},
+            "Value": {"type": "num"},
+        },
+        "table": "Orders",
+    }
+
+    q = QFrame().from_dict(orders)
+
+    assert q.data["fields"]["Value"] == {"type": "num"}
 
 def test_read_excel():
     q = QFrame().read_excel(
-        "C:\\Users\\eg013949\\Documents\\PythonP\\grizly\\grizly\\tests\\tables.xlsx",
+        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
         sheet_name="orders",
     )
     assert q.data["fields"]["Order"] == {
@@ -217,12 +237,26 @@ def test_write_sql_table():
 
 def test_to_sql():
     q = QFrame().read_excel(
-        "C:\\Users\\eg013949\\Documents\\PythonP\\grizly_dev\\grizly\\tests\\tables.xlsx",
+        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
         sheet_name="cb_invoices",
     )
-    engine = 'sqlite:///C:\\Users\\eg013949\\Documents\\PythonP\\grizly_dev\\grizly\\tests\\chinook.db'
+    engine = 'sqlite:///C:\\Users\\TE386850\\grizly\\grizly\\tests\\chinook.db'
     q.assign(sales="Quantity*UnitPrice")
     q.groupby(["TrackId"])[("Quantity")].agg("sum")
     sql = q.get_sql
     df = q.to_sql(engine_string=engine)
-    write_out(df.to_string())
+    write_out(str(q.data))
+
+def test_validation_data():
+    orders = {
+        "fields": {
+            "Order_Nr": {"type": "dim", "as": "Bookings"},
+            "Part": {"type": "dim", "as": "Part"},
+            "Customer": {"type": "num"},
+            "Value": {"type": "num"},
+        },
+        "table": "Orders",
+    }
+
+    result = QFrame().validate_data(orders)
+
