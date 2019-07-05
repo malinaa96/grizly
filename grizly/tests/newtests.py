@@ -257,6 +257,6 @@ def test_validation_data():
         },
         "table": "Orders",
     }
-
-    result = QFrame().validate_data(orders)
+    
+    QFrame().validate_data(orders)
 
