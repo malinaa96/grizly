@@ -76,8 +76,8 @@ class QFrame:
         self.data = data
         return self
 
-    def read_excel(self, excel_path, sheet_name=""):
-        schema, table, columns_qf = read_excel(excel_path, sheet_name)
+    def read_excel(self, excel_path, sheet_name="", query=""):
+        schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
         data = {}
         data["fields"] = columns_qf
         data["schema"] = schema
