@@ -1,13 +1,16 @@
 import pandas
 
 
-def read_excel(excel_path, sheet_name=""):
+def read_excel(excel_path, sheet_name="", query=""):
     if sheet_name != "":
         fields = pandas.read_excel(excel_path, sheet_name=sheet_name).fillna("")
     else:
         fields = pandas.read_excel(excel_path).fillna("")
     if "schema" in fields:
         schema = fields["schema"][0]
+    
+    if query != "":
+        fields = fields.query(query)
     table = fields["table"][0]
 
     columns_qf = {}
