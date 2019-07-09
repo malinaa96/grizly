@@ -8,10 +8,10 @@ def read_excel(excel_path, sheet_name="", query=""):
         fields = pandas.read_excel(excel_path).fillna("")
     if "schema" in fields:
         schema = fields["schema"][0]
-    
+    table = fields["table"][0]
+
     if query != "":
         fields = fields.query(query)
-    table = fields["table"][0]
 
     columns_qf = {}
     for index, row in fields.iterrows():
