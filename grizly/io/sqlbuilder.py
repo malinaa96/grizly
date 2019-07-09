@@ -168,8 +168,13 @@ def to_sql(sql, engine_string):
 
 
 def build_column_strings(qf):
-    fields = qf.data["fields"]
-    expressions = qf.data["expressions"]
+    fields = {}
+    expressions = {}
+    for field in qf.data["fields"]:
+        try:
+            expressions[field] = qf.data["fields"][field]["expression"]
+        except KeyError:
+            fields[field] = qf.data["fields"][field]
     select_names = []
     select_aliases = []
     group_dimensions = []
@@ -192,7 +197,10 @@ def build_column_strings(qf):
                 select_aliases.append(fields[field_key]["as"])
                 select_names.append(select_name)
         except KeyError:
-            select_name = column_name
+            try: 
+                select_name = column_name +" as "+ fields[field_key]["as"]
+            except KeyError: 
+                select_name = column_name  
             select_aliases.append(field_key)
             select_names.append(select_name)
     

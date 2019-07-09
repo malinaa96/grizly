@@ -1,7 +1,7 @@
 import pytest
 import sqlparse
 from ..api import QFrame, union, join
-from ..io.sqlbuilder import get_sql2, write
+from ..io.sqlbuilder import get_sql2, write, build_column_strings
 
 
 def write_out(out):
@@ -257,6 +257,44 @@ def test_validation_data():
         },
         "table": "Orders",
     }
-    
     QFrame().validate_data(orders)
 
+def test_build_column_strings():
+    orders = {
+        "fields": {
+            "Order_Nr": {"type": "dim", "as": "Bookings"},
+            "Value": {"type": "num"},
+            "Value_div": {"type": "num", "as": "Value_div", "group_by": "", "expression": "Orders.Value/100"},
+        },
+        "table": "Orders",
+    }
+    q = QFrame().from_dict(orders)
+    assert build_column_strings(q).data["sql_blocks"]["select_names"] == ["Orders.Order_Nr as Bookings","Orders.Value", "Orders.Value/100 as Value_div"]
+    assert build_column_strings(q).data["sql_blocks"]["select_aliases"] == ["Order_Nr", "Value","Value_div"]
+
+def test_create_sql_blocks():
+    orders = {
+        "fields": {
+            "Order_Nr": {"type": "dim", "as": "Bookings"},
+            "Part": {"type": "dim", "as": "Part"},
+            "Customer": {"type": "dim"},
+            "Value": {"type": "num"},
+            "Value_div": {"type": "num", "as": "Value_div", "group_by": "", "expression": "Orders.Value/100"},
+        },
+        "table": "Orders",
+    }
+    q = QFrame().from_dict(orders)
+    assert q.create_sql_blocks().data == build_column_strings(q).data
+
+def test_assign_2():
+    orders = {
+        "fields": {
+            "Order_Nr": {"type": "dim", "as": "Bookings"},
+            "Part": {"type": "dim", "as": "Part"},
+            "Customer": {"type": "dim"},
+            "Value": {"type": "num"},
+        },
+        "table": "Orders",
+    }
+    q = QFrame().from_dict(orders).assign_2(Value_div="Value/100")
+    assert q.data["fields"]["Value_div"] == {"type": "num", "as": "Value_div", "group_by": "", "expression": "Orders.Value/100"}
