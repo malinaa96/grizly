@@ -1,7 +1,7 @@
 from IPython.display import HTML, display
 import pandas
 import re
-from grizly.io.sqlbuilder import get_sql, to_sql, get_sql2, build_column_strings
+from grizly.io.sqlbuilder import get_sql, to_sql, get_sql2, build_column_strings,get_sql3
 from grizly.io.excel import read_excel
 import sqlparse
 
@@ -49,10 +49,11 @@ class QFrame:
             a subquery
     """
 
-    def __init__(self, data={}, getfields=[]):
+    def __init__(self, data={}, sql="", getfields=[]):
         self.data = data
+        self.sql = sql
         self.getfields = getfields  # remove this and put in data
-        self.fieldattrs = ["type","as","group_by","expression"]
+        self.fieldattrs = ["type","as","group_by","expression","select"]
         self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
 
@@ -220,8 +221,8 @@ class QFrame:
         return df
 
     def get_sql(self, subquery=False):
-        sql = get_sql2(self)
-        return sql
+        self.sql = get_sql3(self).sql
+        return self
 
     def __getitem__(self, getfields):
         self.getfields = []

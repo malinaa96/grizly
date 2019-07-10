@@ -1,7 +1,7 @@
 import pytest
 import sqlparse
 from ..api import QFrame, union, join
-from ..io.sqlbuilder import get_sql2, write, build_column_strings
+from ..io.sqlbuilder import get_sql2, write, build_column_strings, get_sql3
 
 
 def write_out(out):
@@ -73,7 +73,6 @@ def test_read_excel():
         "group_by": "group",
         "as": "Order Number",
     }
-
 
 def test_query():
     orders = {
@@ -235,17 +234,17 @@ def test_write_sql_table():
     q = QFrame().from_dict(orders)
     #sql = write(q, "Orders", drop=True)
 
-def test_to_sql():
-    q = QFrame().read_excel(
-        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
-        sheet_name="cb_invoices",
-    )
-    engine = 'sqlite:///C:\\Users\\TE386850\\grizly\\grizly\\tests\\chinook.db'
-    q.assign(sales="Quantity*UnitPrice")
-    q.groupby(["TrackId"])[("Quantity")].agg("sum")
-    sql = q.get_sql
-    df = q.to_sql(engine_string=engine)
-    write_out(str(q.data))
+# def test_to_sql():
+#     q = QFrame().read_excel(
+#         "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
+#         sheet_name="cb_invoices",
+#     )
+#     engine = 'sqlite:///C:\\Users\\TE386850\\grizly\\grizly\\tests\\chinook.db'
+#     q.assign(sales="Quantity*UnitPrice")
+#     q.groupby(["TrackId"])[("Quantity")].agg("sum")
+#     sql = q.get_sql()
+#     df = q.to_sql(engine_string=engine)
+#     write_out(str(q.data))
 
 def test_validation_data():
     orders = {
@@ -298,3 +297,59 @@ def test_assign_2():
     }
     q = QFrame().from_dict(orders).assign_2(Value_div="Value/100")
     assert q.data["fields"]["Value_div"] == {"type": "num", "as": "Value_div", "group_by": "", "expression": "Orders.Value/100"}
+
+def test_get_sql3():
+    orders = {
+        "fields": {
+            "Order_Nr": {"type": "dim", "as": "Bookings"},
+            "Part": {"type": "dim", "as": "Part"},
+            "Customer": {"type": "dim"},
+            "Value": {"type": "num"},
+            "New_case": {"type": "num", "as": "New_case", "group_by": "", "expression": "CASE WHEN Bookings = 100 THEN 1 ELSE 0 END"},
+        },
+        "table": "Orders",
+    }
+    q = QFrame().from_dict(orders)
+    q.limit(5)
+    q.groupby(q.data["fields"])["Value"].agg("sum")
+    testsql = """SELECT Orders.Order_Nr AS Bookings,
+                    Orders.Part AS Part,
+                    Orders.Customer,
+                    CASE
+                        WHEN Bookings = 100 THEN 1
+                        ELSE 0
+                    END AS New_case,
+                    sum(Orders.Value) AS sum_Value
+                FROM Orders
+                GROUP BY Orders.Order_Nr,
+                        Orders.Part,
+                        Orders.Customer
+                LIMIT 5
+            """
+    sql = get_sql3(q).sql
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+    # write_out(str(sql))
+
+def test_get_sql3_with_select_attr():
+    q = QFrame().read_excel(
+        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
+        sheet_name="orders",
+    )
+    testsql = """
+                SELECT orders.Order AS
+            ORDER Number, orders.Part,
+                        orders.CustomerID_1,
+                        CASE
+                            WHEN CustomerID_1 <> NULL THEN CustomerID_1
+                            ELSE CustomerID_2
+                        END AS CustomerID,
+                        sum(orders.Value) AS sum_Value
+            FROM orders_schema.orders
+            GROUP BY orders.Order,
+                    orders.Part,
+                    orders.CustomerID_1,
+                    orders.CustomerID_2
+            """
+    sql = q.get_sql().sql
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+    write_out(str(sql))
