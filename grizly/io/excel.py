@@ -14,12 +14,21 @@ def read_excel(excel_path, sheet_name="", query=""):
         fields = fields.query(query)
 
     columns_qf = {}
-    for index, row in fields.iterrows():
-        columns_qf[row["column"]] = {}
-        columns_qf[row["column"]]["type"] = row["column_type"]
-        columns_qf[row["column"]]["group_by"] = row["group_by"]
+    for index, row in fields.iterrows(): 
+        if row["column"] == "":
+            attr = row["column_as"]
+        else:   
+            attr = row["column"]
+        columns_qf[attr] = {}
+        columns_qf[attr]["type"] = row["column_type"]
+        columns_qf[attr]["group_by"] = row["group_by"]
+        if row["expression"] != "":
+            columns_qf[attr]["expression"] = row["expression"]
         if row["column_as"] != "":
-            columns_qf[row["column"]]["as"] = row["column_as"]
+            columns_qf[attr]["as"] = row["column_as"]
+        if row["select"] != "":
+            columns_qf[attr]["select"] = row["select"]
+           
     if "schema" in fields:
         return schema, table, columns_qf
     else:

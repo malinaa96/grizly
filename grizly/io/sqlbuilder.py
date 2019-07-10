@@ -193,9 +193,12 @@ def build_column_strings(qf):
             pass
         try:
             if fields[field_key]["group_by"] == "" or fields[field_key]["group_by"] == "group":
-                select_name = column_name +" as "+ fields[field_key]["as"]
-                select_aliases.append(fields[field_key]["as"])
-                select_names.append(select_name)
+                try:
+                    fields[field_key]["select"]
+                except:
+                    select_name = column_name +" as "+ fields[field_key]["as"]
+                    select_aliases.append(fields[field_key]["as"])
+                    select_names.append(select_name)
         except KeyError:
             try: 
                 select_name = column_name +" as "+ fields[field_key]["as"]
@@ -212,4 +215,25 @@ def build_column_strings(qf):
         
     qf.data["sql_blocks"] = {"select_names":select_names, "select_aliases":select_aliases
                                 , "group_dimensions":group_dimensions, "group_values":group_values}
+    return qf
+
+def get_sql3(qf):
+    # TODO: In case of joins we should use somewhere select_aliases.
+    qf.create_sql_blocks()
+    data = qf.data
+    selects = ', '.join(data['sql_blocks']['select_names']+data['sql_blocks']['group_values'])
+    sql = "SELECT {}".format(selects)
+    if "schema" in data and data["schema"] != "":
+        sql += " FROM {}.{}".format(data["schema"],data["table"])
+    else: 
+        sql += " FROM {}".format(data["table"])
+    if "where" in data:
+            sql += " WHERE {}".format(data["where"])
+    if data['sql_blocks']['group_dimensions'] != []:
+        group_names = ', '.join(data['sql_blocks']['group_dimensions'])
+        sql += " GROUP BY {}".format(group_names)
+    if "limit" in data:
+        sql += " LIMIT {}".format(data["limit"])
+    sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
+    qf.sql = sql
     return qf
