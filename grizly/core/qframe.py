@@ -1,7 +1,7 @@
 from IPython.display import HTML, display
 import pandas
 import re
-from grizly.io.sqlbuilder import get_sql, to_sql, get_sql2
+from grizly.io.sqlbuilder import get_sql, to_sql, get_sql2, build_column_strings
 from grizly.io.excel import read_excel
 import sqlparse
 
@@ -52,7 +52,7 @@ class QFrame:
     def __init__(self, data={}, getfields=[]):
         self.data = data
         self.getfields = getfields  # remove this and put in data
-        self.fieldattrs = ["type","as","group_by"]
+        self.fieldattrs = ["type","as","group_by","expression"]
         self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
 
@@ -83,6 +83,9 @@ class QFrame:
         data["schema"] = schema
         data["table"] = table
         return QFrame(data=data)
+
+    def create_sql_blocks(self):
+          return build_column_strings(self)
 
     def query(self, query):
         """
@@ -136,6 +139,28 @@ class QFrame:
             else:
                 for key in kwargs:
                     self.data[key] = kwargs[key]
+        return self
+
+    def assign_2(self, notable=False, type="num", group_by="", **kwargs):
+        """
+            Assign expressions.
+
+            Parameters:
+            ----------
+            notable : Boolean, default False
+                If False adds table name to columns names (eg. before: column1, after: table_name.column1). 
+                Note: For now it's not working with CASE statements, you should set True value then.
+            group_by : string, default ""
+                Note: For now not working.
+
+        """
+        if kwargs is not None:
+            for key in kwargs:
+                if not notable:
+                    expression = prepend_table(self.data,kwargs[key])
+                else:
+                    expression = kwargs[key]
+                self.data["fields"][key] = {"type": type, "as": key, "group_by":group_by, "expression": expression}
         return self
 
     def groupby(self, fields):

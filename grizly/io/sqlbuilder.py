@@ -165,3 +165,51 @@ def to_sql(sql, engine_string):
         if coltype in ["float64"]:
             df[col] = df[col].map("{:,.0f}".format)
     return df
+
+
+def build_column_strings(qf):
+    fields = {}
+    expressions = {}
+    for field in qf.data["fields"]:
+        try:
+            expressions[field] = qf.data["fields"][field]["expression"]
+        except KeyError:
+            fields[field] = qf.data["fields"][field]
+    select_names = []
+    select_aliases = []
+    group_dimensions = []
+    group_values = []
+    for field_key in fields:
+        column_name = qf.data["table"] +"."+field_key
+        try:
+            if fields[field_key]["group_by"] != "" and fields[field_key]["group_by"] != 'group':
+                group_value = "{}({}) as {}_{}".format(fields[field_key]["group_by"], column_name
+                                                       , fields[field_key]["group_by"], field_key)
+                group_values.append(group_value)
+            if fields[field_key]["group_by"] == 'group':
+                group_dimension = column_name
+                group_dimensions.append(group_dimension)
+        except KeyError:
+            pass
+        try:
+            if fields[field_key]["group_by"] == "" or fields[field_key]["group_by"] == "group":
+                select_name = column_name +" as "+ fields[field_key]["as"]
+                select_aliases.append(fields[field_key]["as"])
+                select_names.append(select_name)
+        except KeyError:
+            try: 
+                select_name = column_name +" as "+ fields[field_key]["as"]
+            except KeyError: 
+                select_name = column_name  
+            select_aliases.append(field_key)
+            select_names.append(select_name)
+    
+    for expr_key in expressions:
+        formula = expressions[expr_key]
+        select_name = formula +" as "+expr_key
+        select_names.append(select_name)
+        select_aliases.append(expr_key)
+        
+    qf.data["sql_blocks"] = {"select_names":select_names, "select_aliases":select_aliases
+                                , "group_dimensions":group_dimensions, "group_values":group_values}
+    return qf
