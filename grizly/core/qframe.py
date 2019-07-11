@@ -110,7 +110,6 @@ class QFrame:
                                     "
 
         """
-        # query = prepend_table(self.data, query)
         self.data["where"] = query
         return self
 
