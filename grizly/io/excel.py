@@ -22,12 +22,18 @@ def read_excel(excel_path, sheet_name="", query=""):
         columns_qf[attr] = {}
         columns_qf[attr]["type"] = row["column_type"]
         columns_qf[attr]["group_by"] = row["group_by"]
-        if row["expression"] != "":
-            columns_qf[attr]["expression"] = row["expression"]
+        try: 
+            if row["expression"] != "":
+                columns_qf[attr]["expression"] = row["expression"]
+        except:
+            pass
         if row["column_as"] != "":
             columns_qf[attr]["as"] = row["column_as"]
-        if row["select"] != "":
-            columns_qf[attr]["select"] = row["select"]
+        try:
+            if row["select"] != "":
+                columns_qf[attr]["select"] = row["select"]
+        except:
+            pass
            
     if "schema" in fields:
         return schema, table, columns_qf
