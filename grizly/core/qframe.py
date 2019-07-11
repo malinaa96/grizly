@@ -1,7 +1,7 @@
 from IPython.display import HTML, display
 import pandas
 import re
-from grizly.io.sqlbuilder import get_sql, to_sql, get_sql2, build_column_strings,get_sql3
+from grizly.io.sqlbuilder import get_sql, to_sql, build_column_strings
 from grizly.io.excel import read_excel
 import sqlparse
 
@@ -110,49 +110,27 @@ class QFrame:
                                     "
 
         """
-        #query = prepend_table(self.data, query)
         self.data["where"] = query
         return self
 
-    def assign(self, attribute=False, **kwargs):
+    def assign(self, notable=False, type="num", group_by="", **kwargs):
         """
-            attribute: is False it adds creates a new field in fields. 
-                The new field is a field calculated with an SQL expression
-                TODO: prepend table name to table fields inside the 
-                expression
+        Assign expressions.
 
-                >>> value_x_two = "Value * 2"
-                >>> q.assign(value_x_two=value_x_two)
-                >>> assert q.data["fields"]["value_x_two"] == 
-                        "Value * 2"
-            
-            attribute: is True
-                If attribute is True it adds a new attribute in data
-                >>> engine_string = "some sqlalchemy engine string"
-                >>> q.assign(engine_string=engine_string, attribute=True)
-                >>> assert q.data["engine_string"] == "some sqlalchemy engine string"
-        """
-        if kwargs is not None:
-            if attribute != True:
-                for key in kwargs:
-                    expression = prepend_table(self.data, kwargs[key])
-                    self.data["expressions"] = {key: expression}
-            else:
-                for key in kwargs:
-                    self.data[key] = kwargs[key]
-        return self
+        Parameters:
+        ----------
+        notable : Boolean, default False
+            If False adds table name to columns names (eg. before: column1, after: table_name.column1). 
+            Note: For now it's not working with CASE statements, you should set True value then.
+        group_by : string, default ""
+            Note: For now not working.
 
-    def assign_2(self, notable=False, type="num", group_by="", **kwargs):
-        """
-            Assign expressions.
-
-            Parameters:
-            ----------
-            notable : Boolean, default False
-                If False adds table name to columns names (eg. before: column1, after: table_name.column1). 
-                Note: For now it's not working with CASE statements, you should set True value then.
-            group_by : string, default ""
-                Note: For now not working.
+        Examples:
+        --------
+            >>> value_x_two = "Value * 2"
+            >>> q.assign(value_x_two=value_x_two)
+            >>> assert q.data["fields"]["value_x_two"]["expression"] == 
+                    "Value * 2"
 
         """
         if kwargs is not None:
@@ -188,7 +166,7 @@ class QFrame:
         """
         Creates a subquery that looks like select col1, col2 from (some sql)
         """
-        sql = get_sql()
+        # sql = get_sql()
 
     def rename(self, fields):
         for field in fields:
@@ -213,7 +191,7 @@ class QFrame:
         display(HTML(html_table))
 
     def to_sql(self, engine_string=""):  # put engine_string in fields as meta
-        sql = self.get_sql()
+        sql = self.sql
         if engine_string != "":
             df = to_sql(sql, engine_string)
         else:
@@ -221,7 +199,15 @@ class QFrame:
         return df
 
     def get_sql(self, subquery=False):
-        self.sql = get_sql3(self).sql
+        """
+        Overwrites the sql statement inside the class. Returns a class. To get sql use your_class_name.sql
+
+                >>> q = QFrame().read_excel(excel_path, sheet_name, query)
+                >>> q.get_sql()
+                >>> sql = q.sql
+                >>> print(sql)
+        """
+        self.sql = get_sql(self).sql
         return self
 
     def __getitem__(self, getfields):
@@ -240,8 +226,8 @@ def join(l_q, r_q, on, l_table="l_table", r_table="r_table"):
             onstring += l_table + "." + tup[0] + "=" + r_table + "." + tup[1] + " and "
         else:
             onstring += l_table + "." + tup[0] + "=" + r_table + "." + tup[1]
-    l_q_sql = "({}) as {}".format(l_q.get_sql(), l_table)
-    r_q_sql = "({}) as {}".format(r_q.get_sql(), r_table)
+    l_q_sql = "({}) as {}".format(l_q.sql, l_table)
+    r_q_sql = "({}) as {}".format(r_q.sql, r_table)
     sql = "({} JOIN {} ON {})".format(l_q_sql, r_q_sql, onstring)
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
     attrs = {"sql": sql}
@@ -269,7 +255,7 @@ def union(*args, alias="union"):
     for arg in args:
         d = {**d, **arg.fields}
         counter += 1
-        sql += "({})".format(arg.get_sql())
+        sql += "({})".format(arg.get_sql().sql)
         if counter < len(args):
             sql += " UNION "
         else:

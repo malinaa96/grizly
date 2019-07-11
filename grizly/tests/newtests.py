@@ -1,12 +1,14 @@
 import pytest
 import sqlparse
 from ..api import QFrame, union, join
-from ..io.sqlbuilder import get_sql2, write, build_column_strings, get_sql3
+from ..io.sqlbuilder import write, build_column_strings, get_sql
+import os
+
 
 
 def write_out(out):
     with open(
-        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\output.sql",
+        os.getcwd() + "\\grizly\\tests\\output.sql",
         "w",
     ) as f:
         f.write(out)
@@ -65,7 +67,7 @@ def test_from_dict_2():
 
 def test_read_excel():
     q = QFrame().read_excel(
-        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
+        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
         sheet_name="orders",
     )
     assert q.data["fields"]["Order"] == {
@@ -92,9 +94,9 @@ def test_query():
                 or Value>1000
             """
     )
-    testexpr = """Orders.country!='Italy' 
-                and (Orders.Customer='Enel' or Orders.Customer='Agip')
-                or Orders.Value>1000
+    testexpr = """country!='Italy' 
+                and (Customer='Enel' or Customer='Agip')
+                or Value>1000
             """
     assert expr.data["where"] == testexpr
 
@@ -114,24 +116,6 @@ def test_assign():
     value_x_two = "Value * 2"
     q.assign(value_x_two=value_x_two)
     assert q.data["expressions"]["value_x_two"] == "Orders.Value * 2"
-
-
-def test_assign_attribute():
-    orders = {
-        "fields": {
-            "Order": {"type": "dim", "as": "Bookings"},
-            "Part": {"type": "dim", "as": "Part"},
-            "Customer": {"type": "dim", "as": "Customer"},
-            "Value": {"type": "num"},
-        },
-        "table": "Orders",
-    }
-
-    q = QFrame().from_dict(orders)
-    engine_string = "some sqlalchemy engine string"
-    q.assign(engine_string=engine_string, attribute=True)
-    assert q.data["engine_string"] == "some sqlalchemy engine string"
-
 
 def test_group_by():
     orders = {
@@ -166,61 +150,6 @@ def test_groupby_agg():
     value = {"type": "num", "group_by": "sum", "as": "sum_Value"}
     assert q.data["fields"]["Value"] == value
 
-
-def test_get_sql_1():
-    orders = {
-        "fields": {
-            "Order": {"type": "dim", "as": "Bookings"},
-            "Part": {"type": "dim", "as": "Part"},
-            "Customer": {"type": "dim", "as": "Customer"},
-            "Value": {"type": "num"},
-        },
-        "table": "Orders",
-    }
-    q = QFrame().from_dict(orders)
-    q.groupby(["Order", "Customer"])["Value"].agg("sum")
-    sql = get_sql2(q)
-    testsql = """SELECT Orders.Order AS Bookings,
-                    Orders.Part AS Part,
-                    Orders.Customer AS Customer,
-                    sum(Orders.Value) AS sum_Value
-                FROM Orders
-                GROUP BY Orders.Order,
-                        Orders.Customer"""
-    assert clean_testexpr(sql) == clean_testexpr(testsql)
-
-
-def test_get_sql_2():
-    orders = {
-        "fields": {
-            "Order": {"type": "dim", "as": "Bookings"},
-            "Part": {"type": "dim", "as": "Part"},
-            "Customer": {"type": "dim"},
-            "Value": {"type": "num"},
-        },
-        "table": "Orders",
-    }
-    q = QFrame().from_dict(orders)
-    q.groupby(["Order", "Customer"])["Value"].agg("sum")
-    q.query("Value > 1000")
-    value_x_two = "Value * 2"
-    q.assign(value_x_two=value_x_two)
-    q.limit(10)
-    q.assign(table="tabledata", attribute=True)
-    sql = get_sql2(q)
-    testsql = """SELECT tabledata.Order AS Bookings,
-                    tabledata.Part AS Part,
-                    tabledata.Customer,
-                    sum(tabledata.Value) AS sum_Value,
-                    (Orders.Value * 2) AS value_x_two
-                FROM tabledata
-                WHERE Orders.Value > 1000
-                GROUP BY tabledata.Order,
-                        tabledata.Customer
-                LIMIT 10"""
-    assert clean_testexpr(sql) == clean_testexpr(testsql)
-
-
 def test_write_sql_table():
     orders = {
         "fields": {
@@ -234,17 +163,20 @@ def test_write_sql_table():
     q = QFrame().from_dict(orders)
     #sql = write(q, "Orders", drop=True)
 
-# def test_to_sql():
-#     q = QFrame().read_excel(
-#         "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
-#         sheet_name="cb_invoices",
-#     )
-#     engine = 'sqlite:///C:\\Users\\TE386850\\grizly\\grizly\\tests\\chinook.db'
-#     q.assign(sales="Quantity*UnitPrice")
-#     q.groupby(["TrackId"])[("Quantity")].agg("sum")
-#     sql = q.get_sql()
-#     df = q.to_sql(engine_string=engine)
-#     write_out(str(q.data))
+def test_to_sql():
+    q = QFrame().read_excel(
+        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
+        sheet_name="cb_invoices",
+    )
+    engine = "sqlite:///" + os.getcwd() + "\\grizly\\tests\\chinook.db"
+    q.assign(sales="Quantity*UnitPrice")
+    q.groupby(["TrackId"])[("Quantity")].agg("sum")
+    q.get_sql()
+    df = q.to_sql(engine_string=engine)
+    testdata = str({'fields': {'InvoiceLineId': {'type': 'dim', 'group_by': ''}, 'InvoiceId': {'type': 'dim', 'group_by': ''}, 'TrackId': {'type': 'dim', 'group_by': 'group'}, 'UnitPrice': {'type': 'num', 'group_by': ''}, 'Quantity': {'type': 'num', 'group_by': 'sum', 'as': 'sum_Quantity'}, 'sales': {'type': 'num', 'as': 'sales', 'group_by': '', 'expression': 'invoice_items.Quantity*invoice_items.UnitPrice'}}, 'schema': '', 'table': 'invoice_items', 
+    'sql_blocks': {'select_names': ['invoice_items.InvoiceLineId', 'invoice_items.InvoiceId', 'invoice_items.TrackId', 'invoice_items.UnitPrice', 'invoice_items.Quantity*invoice_items.UnitPrice as sales'], 'select_aliases': ['InvoiceLineId', 'InvoiceId', 'TrackId', 'UnitPrice', 'sales'], 'group_dimensions': ['invoice_items.TrackId'], 'group_values': ['sum(invoice_items.Quantity) as sum_Quantity']}})
+    # write_out(str(q.data))
+    assert testdata == str(q.data)
 
 def test_validation_data():
     orders = {
@@ -285,7 +217,7 @@ def test_create_sql_blocks():
     q = QFrame().from_dict(orders)
     assert q.create_sql_blocks().data == build_column_strings(q).data
 
-def test_assign_2():
+def test_assign():
     orders = {
         "fields": {
             "Order_Nr": {"type": "dim", "as": "Bookings"},
@@ -295,10 +227,10 @@ def test_assign_2():
         },
         "table": "Orders",
     }
-    q = QFrame().from_dict(orders).assign_2(Value_div="Value/100")
+    q = QFrame().from_dict(orders).assign(Value_div="Value/100")
     assert q.data["fields"]["Value_div"] == {"type": "num", "as": "Value_div", "group_by": "", "expression": "Orders.Value/100"}
 
-def test_get_sql3():
+def test_get_sql():
     orders = {
         "fields": {
             "Order_Nr": {"type": "dim", "as": "Bookings"},
@@ -326,13 +258,13 @@ def test_get_sql3():
                         Orders.Customer
                 LIMIT 5
             """
-    sql = get_sql3(q).sql
+    sql = get_sql(q).sql
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     # write_out(str(sql))
 
-def test_get_sql3_with_select_attr():
+def test_get_sql_with_select_attr():
     q = QFrame().read_excel(
-        "C:\\Users\\TE386850\\grizly\\grizly\\tests\\tables.xlsx",
+        os.getcwd() + "\\grizly\\tests\\tables.xlsx",
         sheet_name="orders",
     )
     testsql = """
@@ -352,4 +284,4 @@ def test_get_sql3_with_select_attr():
             """
     sql = q.get_sql().sql
     assert clean_testexpr(sql) == clean_testexpr(testsql)
-    write_out(str(sql))
+    # write_out(str(sql))
