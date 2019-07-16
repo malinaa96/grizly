@@ -149,6 +149,7 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
 
     Parameters:
     -----------
+    qf : QFrame object
     table : string
         Name of SQL table.
     s3_name : string
@@ -158,7 +159,7 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
             How to behave if the table already exists.
             * fail: Raise a ValueError.
-            * replace: Clean table before inserting new values.
+            * replace: Clean table before inserting new values. NOTE: It won't drop the table.
             * append: Insert new values to the existing table.
     sep : string, default '\t'
         Separator/delimiter in csv file.
@@ -174,7 +175,7 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
         if if_exists == 'fail':
             raise ValueError("Table {} already exists".format(table_name))
         elif if_exists == 'replace':
-            sql ="DELETE FROM {}.{}".format(schema, table_name)
+            sql ="DELETE FROM {}".format(table_name)
             engine.execute(sql)
             print('SQL table has been cleaned up successfully.')
         else:
