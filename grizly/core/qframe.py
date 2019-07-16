@@ -239,7 +239,10 @@ class QFrame:
         db : {'Denodo', 'Redshift'}, default 'Denodo'
             Name of database.
         """
-        self.get_sql()
+        if self.sql == '':
+            self.create_sql_blocks()
+            self.get_sql()
+
         to_csv(self,csv_path,self.sql,db)
         return self
 
@@ -305,8 +308,10 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        self.create_sql_blocks()
-        self.get_sql()
+        if self.sql == '':
+            self.create_sql_blocks()
+            self.get_sql()
+            
         to_csv(self,csv_path, self.sql)
         csv_to_s3(csv_path, s3_name)
         s3_to_rds(self, table, s3_name, schema=schema, if_exists=if_exists, sep='\t')
@@ -318,7 +323,6 @@ class QFrame:
         self.getfields = []
         self.getfields.append(getfields)
         return self
-
 
 
 
