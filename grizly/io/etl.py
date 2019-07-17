@@ -143,6 +143,44 @@ def s3_to_csv(s3_name, csv_path):
     print('{} uploaded to {}'.format(s3_name, csv_path))
 
 
+def delete_where(table, schema='', **kwargs):
+    """
+    Removes records from Redshift table which satisfy **kwargs.
+    
+    Parameters:
+    ----------
+    table : string
+        Name of SQL table.
+    schema : string, optional
+        Specify the schema.
+
+    Examples:
+    --------
+        >>> delete_where('test_table', schema='testing', fiscal_year=2019)
+
+        Will generate and execute query "DELETE FROM testing.test WHERE fiscal_year = '2019'"
+
+
+        >>> delete_where('test_table', schema='testing', fiscal_year=2018, customer='Enel')
+
+        Will generate and execute two queries:
+        "DELETE FROM testing.test WHERE fiscal_year = '2018'"
+        "DELETE FROM testing.test WHERE customer = 'Enel'"
+        
+    """
+    engine = create_engine(store["redshift"])
+    if schema == '':
+        table_name = table
+    else:
+        table_name = schema + '.' + table
+
+    if kwargs is not None:
+        for key in kwargs:
+            sql ="DELETE FROM {} WHERE {} = '{}' ".format(table_name, key, kwargs[key])
+            engine.execute(sql)
+            print('Records from table {} where {} = \'{}\' has been removed successfully.'.format(table_name, key, kwargs[key]))
+
+
 def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.

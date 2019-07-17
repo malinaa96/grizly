@@ -5,7 +5,7 @@ import os
 from grizly.io.sqlbuilder import get_sql, to_sql, build_column_strings
 from grizly.io.excel import read_excel
 import sqlparse
-from grizly.io.etl import read_store, create_table, to_csv, check_if_exists, s3_to_rds, csv_to_s3
+from grizly.io.etl import *
 
 
 def prepend_table(data, expression):
@@ -316,6 +316,36 @@ class QFrame:
         csv_to_s3(csv_path, s3_name)
         s3_to_rds(self, table, s3_name, schema=schema, if_exists=if_exists, sep='\t')
 
+        return self
+
+
+    def delete_where(self, table, schema='', **kwargs):
+        """
+        Removes records from Redshift table which satisfy **kwargs.
+
+        Parameters:
+        ----------
+        table : string
+            Name of SQL table.
+        schema : string, optional
+            Specify the schema.
+
+        Examples:
+        --------
+            >>> q.delete_where('test_table', schema='testing', fiscal_year=2019)
+
+            Will generate and execute query:
+            "DELETE FROM testing.test WHERE fiscal_year = '2019'"
+
+
+            >>> q.delete_where('test_table', schema='testing', fiscal_year=2018, customer='Enel')
+
+            Will generate and execute two queries:
+            "DELETE FROM testing.test WHERE fiscal_year = '2018'"
+            "DELETE FROM testing.test WHERE customer = 'Enel'"
+
+        """
+        delete_where(table, schema, **kwargs)
         return self
 
 
