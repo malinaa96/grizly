@@ -166,20 +166,22 @@ def delete_where(table, schema='', **kwargs):
         Will generate and execute two queries:
         "DELETE FROM testing.test WHERE fiscal_year = '2018'"
         "DELETE FROM testing.test WHERE customer = 'Enel'"
-        
+
     """
-    engine = create_engine(store["redshift"])
     if schema == '':
         table_name = table
     else:
         table_name = schema + '.' + table
+    if check_if_exists(table, schema):
+        engine = create_engine(store["redshift"])
 
-    if kwargs is not None:
-        for key in kwargs:
-            sql ="DELETE FROM {} WHERE {} = '{}' ".format(table_name, key, kwargs[key])
-            engine.execute(sql)
-            print('Records from table {} where {} = \'{}\' has been removed successfully.'.format(table_name, key, kwargs[key]))
-
+        if kwargs is not None:
+            for key in kwargs:
+                sql ="DELETE FROM {} WHERE {} = '{}' ".format(table_name, key, kwargs[key])
+                engine.execute(sql)
+                print('Records from table {} where {} = \'{}\' has been removed successfully.'.format(table_name, key, kwargs[key]))
+    else:
+        print("Table {} doesn't exist.".format(table_name))
 
 def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     """
