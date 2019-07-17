@@ -286,7 +286,7 @@ class QFrame:
         return self
 
         
-    def to_rds(self, table, csv_path, s3_name, schema='', if_exists='fail', sep='\t'):
+    def to_rds(self, table, csv_path, s3_name, schema='', db='Denodo', if_exists='fail', sep='\t'):
         """
         Writes table to Redshift database.
 
@@ -294,12 +294,14 @@ class QFrame:
         ----------
         table : string
             Name of SQL table.
-        schema : string, optional
-            Specify the schema.
         csv_path : string
             Path to csv file.
         s3_name : string
             Name of s3.
+        schema : string, optional
+            Specify the schema.
+        db : {'Denodo', 'Redshift'}, default 'Denodo'
+            Name of database from which you want to load data.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
                 How to behave if the table already exists.
                 * fail: Raise a ValueError.
@@ -312,7 +314,7 @@ class QFrame:
             self.create_sql_blocks()
             self.get_sql()
             
-        to_csv(self,csv_path, self.sql)
+        to_csv(self,csv_path, self.sql, db=db, sep=sep)
         csv_to_s3(csv_path, s3_name)
         s3_to_rds(self, table, s3_name, schema=schema, if_exists=if_exists, sep='\t')
 
