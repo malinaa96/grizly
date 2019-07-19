@@ -1,6 +1,8 @@
 import sqlparse
 import pandas
 from sqlalchemy import create_engine
+import copy
+
 
 def to_col_name(data, field, agg="", noas=False):
     col_name = data["table"] + "." + field
@@ -55,14 +57,18 @@ def to_sql(sql, engine_string):
 
 
 def build_column_strings(qf):
+    if 'fields' not in qf.data:
+        data = qf.data[list(qf.data.keys())[-1]]
+    else:
+        data = qf.data
     fields = {}
     fields_with_expr = {}
-    for field in qf.data["fields"]:
+    for field in data["fields"]:
         try:
-            qf.data["fields"][field]["expression"]
-            fields_with_expr[field] = qf.data["fields"][field]
+            data["fields"][field]["expression"]
+            fields_with_expr[field] = data["fields"][field]
         except KeyError:
-            fields[field] = qf.data["fields"][field]
+            fields[field] = data["fields"][field]
     select_names = []
     select_aliases = []
     group_dimensions = []
@@ -70,13 +76,15 @@ def build_column_strings(qf):
     types = []
     for field_key in fields:
 
-        column_name = qf.data["table"] +"."+field_key
+        # column_name = data["table"] +"."+field_key
+        column_name = field_key
         if 'group_by' in fields[field_key] and fields[field_key]["group_by"] != "":
             if fields[field_key]["group_by"] != 'group':
                 try:
                     alias = fields[field_key]["as"]
                 except KeyError:
-                    alias = "{}_{}".format(fields[field_key]["group_by"], field_key)
+                    # alias = "{}_{}".format(fields[field_key]["group_by"], field_key)
+                    alias = field_key
                 group_value = "{}({}) as {}".format(fields[field_key]["group_by"], column_name, alias)
                 group_values.append(group_value)
                 select_names.append(group_value)
@@ -124,27 +132,54 @@ def build_column_strings(qf):
         select_names.append(select_name)
         select_aliases.append(field)
 
-    qf.data["sql_blocks"] = {"select_names":select_names, "select_aliases":select_aliases
+    data["sql_blocks"] = {"select_names":select_names, "select_aliases":select_aliases
                                 , "group_dimensions":group_dimensions, "group_values":group_values, "types": types}
+    
+    if 'fields' not in qf.data:
+        qf.data[list(qf.data.keys())[-1]] = data
+    else:
+        qf.data = data
     return qf
 
 def get_sql(qf):
     # TODO: In case of joins we should use somewhere select_aliases.
     qf.create_sql_blocks()
-    data = qf.data
-    selects = ', '.join(data['sql_blocks']['select_names'])
-    sql = "SELECT {}".format(selects)
-    if "schema" in data and data["schema"] != "":
-        sql += " FROM {}.{}".format(data["schema"],data["table"])
-    else: 
-        sql += " FROM {}".format(data["table"])
-    if "where" in data:
-            sql += " WHERE {}".format(data["where"])
-    if data['sql_blocks']['group_dimensions'] != []:
-        group_names = ', '.join(data['sql_blocks']['group_dimensions'])
-        sql += " GROUP BY {}".format(group_names)
-    if "limit" in data:
-        sql += " LIMIT {}".format(data["limit"])
+    if 'fields' not in qf.data:
+        data = qf.data[list(qf.data.keys())[-1]]
+    else:
+        data = qf.data
+    if "join" in data:
+        selects = ', '.join(data['sql_blocks']['select_names'])
+        iterator = 0
+        qf_copy = copy.deepcopy(qf)        
+        qf_copy.data = qf.data[f'pip{iterator+1}']
+        left_table = get_sql(qf_copy).sql
+        sql = f"SELECT {selects} FROM ({left_table}) pip{iterator+1}"
+
+        for join in data["join"]["on"]:
+            qf_copy.data = qf.data[f'pip{iterator+2}']
+            right_table = get_sql(qf_copy).sql
+            join_type = data["join"]["join_type"][iterator]
+            on = data["join"]["on"][iterator]
+
+            sql += f" {join_type} ({right_table}) pip{iterator+2} ON {on}"
+            iterator += 1
+
+    else:
+        selects = ', '.join(data['sql_blocks']['select_names'])
+        sql = "SELECT {}".format(selects)
+        if "schema" in data and data["schema"] != "":
+            sql += " FROM {}.{}".format(data["schema"],data["table"])
+        else: 
+            sql += " FROM {}".format(data["table"])
+        if "where" in data:
+                sql += " WHERE {}".format(data["where"])
+        if data['sql_blocks']['group_dimensions'] != []:
+            group_names = ', '.join(data['sql_blocks']['group_dimensions'])
+            sql += " GROUP BY {}".format(group_names)
+        if "limit" in data:
+            sql += " LIMIT {}".format(data["limit"])
+
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
     qf.sql = sql
     return qf

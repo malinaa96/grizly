@@ -1,16 +1,11 @@
 import boto3
 import os
 from sqlalchemy import create_engine
-import json
 from sqlalchemy.pool import NullPool
 import pandas as pd
 import csv
+from grizly.core.utils import read_store
 
-def read_store():
-    json_path = os.path.join(os.getcwd(), 'json', 'etl_store.json')
-    with open(json_path, 'r') as f:
-                store = json.load(f)
-    return store
 
 store = read_store()
 os.environ["HTTPS_PROXY"] = store["https"]
@@ -56,18 +51,6 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
     con.close()
 
 
-def check_if_exists(table, schema=''):
-    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
-    if schema == '':
-        table_name = table
-        sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
-    else:
-        table_name = schema + '.' + table
-        sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ". format(schema, table)
-        
-    return not pd.read_sql_query(sql = sql_exists, con=engine).empty
-
-
 def create_table(qf, table, schema=''):
     """
     Creates a new table in database if the table doesn't exist.
@@ -81,11 +64,9 @@ def create_table(qf, table, schema=''):
         Specify the schema.
     """
     engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
-    if schema == '':
-        table_name = table
-    else:
-        table_name = schema + '.' + table
-    
+
+    table_name = f'{schema}.{table}' if schema else f'{table}' 
+
     if check_if_exists(table, schema):
         print("Table {} already exists.".format(table_name))
 
@@ -143,45 +124,7 @@ def s3_to_csv(s3_name, csv_path):
     print('{} uploaded to {}'.format(s3_name, csv_path))
 
 
-def delete_where(table, schema='', **kwargs):
-    """
-    Removes records from Redshift table which satisfy **kwargs.
-    
-    Parameters:
-    ----------
-    table : string
-        Name of SQL table.
-    schema : string, optional
-        Specify the schema.
 
-    Examples:
-    --------
-        >>> delete_where('test_table', schema='testing', fiscal_year=2019)
-
-        Will generate and execute query "DELETE FROM testing.test WHERE fiscal_year = '2019'"
-
-
-        >>> delete_where('test_table', schema='testing', fiscal_year=2018, customer='Enel')
-
-        Will generate and execute two queries:
-        "DELETE FROM testing.test WHERE fiscal_year = '2018'"
-        "DELETE FROM testing.test WHERE customer = 'Enel'"
-
-    """
-    if schema == '':
-        table_name = table
-    else:
-        table_name = schema + '.' + table
-    if check_if_exists(table, schema):
-        engine = create_engine(store["redshift"])
-
-        if kwargs is not None:
-            for key in kwargs:
-                sql ="DELETE FROM {} WHERE {} = '{}' ".format(table_name, key, kwargs[key])
-                engine.execute(sql)
-                print('Records from table {} where {} = \'{}\' has been removed successfully.'.format(table_name, key, kwargs[key]))
-    else:
-        print("Table {} doesn't exist.".format(table_name))
 
 def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     """
@@ -206,10 +149,7 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     """
     engine = create_engine(store["redshift"])
     
-    if schema == '':
-        table_name = table
-    else:
-        table_name = schema + '.' + table
+    table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
         if if_exists == 'fail':
