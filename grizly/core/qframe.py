@@ -6,6 +6,7 @@ from grizly.io.sqlbuilder import get_sql, to_sql, build_column_strings
 from grizly.io.excel import read_excel
 import sqlparse
 from grizly.io.etl import *
+from grizly.core.utils import *
 
 
 def prepend_table(data, expression):
@@ -75,7 +76,7 @@ class QFrame:
                 raise KeyError("Some of your columns don't have types.")
 
     def from_dict(self, data):
-        self.validate_data(data)
+        # self.validate_data(data)
         self.data = data
         return self
 
@@ -115,7 +116,7 @@ class QFrame:
         self.data["where"] = query
         return self
 
-    def assign(self, notable=False, type="num", group_by="", **kwargs):
+    def assign(self, notable=False, type="dim", group_by="", **kwargs):
         """
         Assign expressions.
 
@@ -124,6 +125,10 @@ class QFrame:
         notable : Boolean, default False
             If False adds table name to columns names (eg. before: column1, after: table_name.column1). 
             Note: For now it's not working with CASE statements, you should set True value then.
+        type: {'dim', 'num'}, default 'dim
+            Column type.
+            * dim: VARCHAR(500)
+            * num: FLOAT(53)
         group_by : string, default ""
             Note: For now not working.
 
@@ -321,44 +326,45 @@ class QFrame:
         return self
 
 
-    def delete_where(self, table, schema='', **kwargs):
-        """
-        Removes records from Redshift table which satisfy **kwargs.
-
-        Parameters:
-        ----------
-        table : string
-            Name of SQL table.
-        schema : string, optional
-            Specify the schema.
-
-        Examples:
-        --------
-            >>> q.delete_where('test_table', schema='testing', fiscal_year=2019)
-
-            Will generate and execute query:
-            "DELETE FROM testing.test WHERE fiscal_year = '2019'"
-
-
-            >>> q.delete_where('test_table', schema='testing', fiscal_year=2018, customer='Enel')
-
-            Will generate and execute two queries:
-            "DELETE FROM testing.test WHERE fiscal_year = '2018'"
-            "DELETE FROM testing.test WHERE customer = 'Enel'"
-
-        """
-        delete_where(table, schema, **kwargs)
-        return self
-
-
     def __getitem__(self, getfields):
         self.getfields = []
         self.getfields.append(getfields)
         return self
 
 
+def join(qframes=[], join_type=[], on=[]):
+    data = {}
+    pipelines = []
+    
+#     adding pipelines
+    iterator = 0
+    for q in qframes:
+        iterator += 1
+        data[f"pip{iterator}"] = q.data
 
-def join(l_q, r_q, on, l_table="l_table", r_table="r_table"):
+#     adding join
+    new_pip_name = f"pip{iterator+1}"
+    new_pip = {'fields': {}}
+    iterator = 0
+    for q in qframes:
+        iterator += 1
+        if 'fields' in q.data:
+            pip = q.data
+        else:
+            pip = q.data[list(q.data.keys())[-1]]
+        for alias in pip["sql_blocks"]["select_aliases"]:
+            for field in pip["fields"]:
+                if field == alias or "as" in pip["fields"][field] and pip["fields"][field]["as"] == alias:
+                    new_pip["fields"][f"pip{iterator}.{alias}"] = {"type": pip["fields"][field]["type"]}
+                    break
+                    
+    new_pip["join"] = { "join_type": join_type, "on": on}
+    data[new_pip_name] = new_pip
+    q = QFrame(data = data)
+    return q
+
+
+def join_old(l_q, r_q, on, l_table="l_table", r_table="r_table"):
     onstring = ""
     count = 0
     for tup in on:
