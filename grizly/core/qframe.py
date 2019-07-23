@@ -7,6 +7,7 @@ from grizly.io.excel import read_excel
 import sqlparse
 from grizly.io.etl import *
 from grizly.core.utils import *
+import copy
 
 
 def prepend_table(data, expression):
@@ -62,6 +63,7 @@ class QFrame:
 
     def validate_data(self, data):
         # validating fields, need to validate other stuff too
+        data = data["select"]
 
         for field_key in data['fields']:
             for key_attr in data['fields'][field_key]:
@@ -86,6 +88,7 @@ class QFrame:
         data["fields"] = columns_qf
         data["schema"] = schema
         data["table"] = table
+        data = {"select": data}
         return QFrame(data=data)
 
     def create_sql_blocks(self):
@@ -113,7 +116,7 @@ class QFrame:
                                     "
 
         """
-        self.data["where"] = query
+        self.data["select"]["where"] = query
         return self
 
     def assign(self, notable=False, type="dim", group_by="", **kwargs):
@@ -146,12 +149,12 @@ class QFrame:
                     expression = prepend_table(self.data,kwargs[key])
                 else:
                     expression = kwargs[key]
-                self.data["fields"][key] = {"type": type, "as": key, "group_by":group_by, "expression": expression}
+                self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by":group_by, "expression": expression}
         return self
 
     def groupby(self, fields):
         for field in fields:
-            self.data["fields"][field]["group_by"] = "group"
+            self.data["select"]["fields"][field]["group_by"] = "group"
         return self
 
     def agg(self, aggtype):
@@ -159,14 +162,14 @@ class QFrame:
             self.getfields = [self.getfields]
         if aggtype in ["sum", "count"]:
             for field in self.getfields:
-                self.data["fields"][field]["group_by"] = aggtype
-                self.data["fields"][field]["as"] = "sum_{}".format(field)
+                self.data["select"]["fields"][field]["group_by"] = aggtype
+                self.data["select"]["fields"][field]["as"] = "sum_{}".format(field)
             return self
         else:
             return print("Aggregation type must be sum or count")
 
     def limit(self, limit):
-        self.data["limit"] = str(limit)
+        self.data["select"]["limit"] = str(limit)
         return self
 
     def select(self):
@@ -176,9 +179,41 @@ class QFrame:
         # sql = get_sql()
 
     def rename(self, fields):
+        """
+        Renames columns.
+
+        Parameters:
+        -----------
+        fields : dict
+            Dictionary of columns and their new names.
+
+        Examples:
+        --------
+            >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
+    
+        """
         for field in fields:
-            self.data["fields"][field]["as"] = fields[field]
-        self
+            if field in self.data["select"]["fields"]:
+                self.data["select"]["fields"][field]["as"] = fields[field]
+        return self
+
+    def remove(self, fields):
+        """
+        Removes fields.
+
+        Parameters:
+        -----------
+        fields : list
+            List of fields to remove.
+
+        Examples:
+        --------
+            >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
+    
+        """
+        for field in fields:
+            self.data["select"]["fields"].pop(field, "Field not found.")
+        return self
 
     def to_html(self):
         from IPython.display import HTML, display
@@ -325,6 +360,35 @@ class QFrame:
 
         return self
 
+    def show_duplicates(self):
+        """
+        Shows duplicated columns.
+        """
+        columns = {}
+        fields = self.data["select"]["fields"]
+
+        for field in fields:
+            alias = fields[field]["as"]
+            if alias in columns.keys():
+                columns[alias].append(field)
+            else:
+                columns[alias] = [field]
+
+        duplicates = copy.deepcopy(columns)
+        for alias in columns.keys():
+            if len(columns[alias]) == 1:
+                duplicates.pop(alias)
+
+        if duplicates != {}:
+            print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
+            for key in duplicates.keys():
+                print("\033[1m", key, "\033[0m", ":\t", duplicates[key], "\n")
+            print("Use your_qframe.remove() to remove or your_qframe.rename() to rename columns.")
+
+        else:
+            print("There are no duplicated columns.")
+        return self
+
 
     def __getitem__(self, getfields):
         self.getfields = []
@@ -333,35 +397,177 @@ class QFrame:
 
 
 def join(qframes=[], join_type=[], on=[]):
-    data = {}
-    pipelines = []
-    
-#     adding pipelines
-    iterator = 0
-    for q in qframes:
-        iterator += 1
-        data[f"pip{iterator}"] = q.data
+    """
+    Joins QFrame objects. Returns QFrame. 
 
-#     adding join
-    new_pip_name = f"pip{iterator+1}"
-    new_pip = {'fields': {}}
+    By default all fields from each QFrame in qframes are added to joined QFrame. 
+    Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame. 
+    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFarme therefore after performing join please remove fields with the same aliases or change the aliases.
+
+    Parameters:
+    ----------
+    qframes : list
+        List of qframes
+    join_type : list
+        List of join types.
+    on : list
+        List of on join conditions. In case of CROSS JOIN set the condition on 0. 
+        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}" if you want to refer to the column. Check examples. 
+
+    NOTE: Order of the elements in join_type and on list is important.
+
+    Examples:
+    --------
+        qframes:
+        q1 -> fields: customer_id, orders
+        q2 -> fields: customer_id, orders as 'ord'
+
+        >>> q_joined = join(qframes=[q1,q2], join_type=["LEFT JOIN"], on=["sq1.customer_id=sq2.customer_id"])
+
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
+                            sq2.customer_id as 'customer_id', sq2.ord as 'ord'
+
+        >>> q_joined.show_duplicates()
+            DUPLICATED COLUMNS: 
+                customer_id : ['sq1.customer_id', 'sq2.customer_id']
+
+        >>> q_joined.remove(['sq2.customer_id'])
+
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
+                            sq2.ord as 'ord'
+
+        >>> q_joined.get_sql()
+        >>> print(q_joined.sql)
+            SELECT  sq1.customer_id as 'customer_id', 
+                    sq1.orders as 'orders', 
+                    sq2.ord as 'ord' 
+            FROM 
+                (q1.sql) sq1
+            LEFT JOIN
+                (q2.sql) sq2
+            ON sq1.customer_id=sq2.customer_id
+
+        ------------------------
+        qframes:
+        q1 -> fields: customer_id, orders
+        q2 -> fields: customer_id, orders as 'ord'
+        q3 -> fields: id, orders, date
+
+        >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", INNER JOIN"], on=[0, "sq2.customer_id=sq3.id"])
+
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
+                            sq2.customer_id as 'customer_id', sq2.ord as 'ord',
+                            sq3.id as 'id', sq3.orders as 'orders', sq3.date as 'date'
+
+        >>> q_joined.show_duplicates()
+            DUPLICATED COLUMNS: 
+                customer_id : ['sq1.customer_id', 'sq2.customer_id']
+                orders : ['sq1.orders', 'sq3.orders']
+
+        >>> q_joined.remove(['sq2.customer_id', 'sq3.id'])
+        >>> q_joined.rename({'sq1.orders': 'orders_1', 'sq2.ord': 'orders_2', 'sq3.orders' : 'orders_3})        
+
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders_1', 
+                            sq2.ord as 'orders_2',
+                            sq3.orders as 'orders_3', sq3.date as 'date
+
+        >>> q_joined.get_sql()
+        >>> print(q_joined.sql)
+            SELECT  sq1.customer_id as 'customer_id', 
+                    sq1.orders as 'orders_1', 
+                    sq2.ord as 'orders_2',
+                    sq3.orders as 'orders_3',
+                    sq3.date as 'date 
+            FROM 
+                (q1.sql) sq1
+            CROSS JOIN
+                (q2.sql) sq2
+            INNER JOIN 
+                (q3.sql) sq3 ON sq2.customer_id=sq3.id
+
+    """
+    assert len(qframes) == len(join_type)+1 and len(join_type) == len(on), "Incorrect list size."
+
+    data = {'select': {'fields': {} }}
+
     iterator = 0
     for q in qframes:
         iterator += 1
-        if 'fields' in q.data:
-            pip = q.data
-        else:
-            pip = q.data[list(q.data.keys())[-1]]
-        for alias in pip["sql_blocks"]["select_aliases"]:
-            for field in pip["fields"]:
-                if field == alias or "as" in pip["fields"][field] and pip["fields"][field]["as"] == alias:
-                    new_pip["fields"][f"pip{iterator}.{alias}"] = {"type": pip["fields"][field]["type"]}
+        data[f"sq{iterator}"] = q.data
+        sq = q.data['select']
+            
+        for alias in sq["sql_blocks"]["select_aliases"]:
+            for field in sq["fields"]:
+                if field == alias or "as" in sq["fields"][field] and sq["fields"][field]["as"] == alias:
+                    data["select"]["fields"][f"sq{iterator}.{alias}"] = {"type": sq["fields"][field]["type"], "as": alias}
+                    if "custom_type" in sq["fields"][field]:
+                        data["select"]["fields"][f"sq{iterator}.{alias}"]["custom_type"] = sq["fields"][field]["custom_type"]
                     break
                     
-    new_pip["join"] = { "join_type": join_type, "on": on}
-    data[new_pip_name] = new_pip
-    q = QFrame(data = data)
-    return q
+    data["select"]["join"] = { "join_type": join_type, "on": on}
+
+    print("Data joined successfully. Please remove or rename duplicated columns. Use your_qframe.show_duplicates() to check duplicates.")
+    return QFrame(data = data)
+
+
+def union(qframes=[], union_type=[]):
+    """
+    Unions QFrame objects. Returns QFrame.
+
+    TODO: Add validations on columns and an option to check unioned columns.
+
+    Parameters:
+    ----------
+    qframes : list
+        List of qframes
+    union_type : list
+        List of union types. Valid types: 'UNION', 'UNION ALL'.
+
+    Examples:
+    --------
+        qframes:
+        q1 -> fields: customer_id, customer_name, orders
+        q2 -> fields: customer_id, customer, orders
+        q2 -> fields: id, customer, orders
+
+        >>> q_unioned = union(qframes=[q1, q2, q3], union_type=["UNION ALL", "UNION"])
+
+        q_unioned -> fields: customer_id, customer_name, orders
+
+        >>> q_unioned.get_sql()
+        >>> print(q_unioned.sql)
+        
+            q1.sql
+            UNION ALL
+            q2.sql
+            UNION
+            q3.sql
+
+    """
+    assert len(qframes) == len(union_type)+1, "Incorrect list size."
+    assert set(item.upper() for item in union_type) <= {"UNION", "UNION ALL"}, "Incorrect union type. Valid types: 'UNION', 'UNION ALL'."
+    data = {'select': {'fields': {}}}
+
+    iterator = 0
+    for q in qframes:
+        iterator += 1
+        data[f"sq{iterator}"] = q.data 
+                
+    fields = copy.deepcopy(data["sq1"]["select"]["fields"])
+    
+    for field in fields:
+        if "select" in fields[field] and fields[field]["select"] == 0:
+            continue
+        else:
+            alias = field if "as" not in fields[field] else fields[field]["as"]  
+            data["select"]["fields"][alias] = {"type": fields[field]["type"]}
+            if "custom_type" in fields[field]:
+                data["select"]["fields"][alias]["custom_type"] = fields[field]["custom_type"]
+                
+    data["select"]["union"] = {"union_type": union_type}
+
+    print("Data unioned successfully.")
+    return QFrame(data = data)
 
 
 def join_old(l_q, r_q, on, l_table="l_table", r_table="r_table"):
@@ -390,7 +596,7 @@ def join_old(l_q, r_q, on, l_table="l_table", r_table="r_table"):
     return QFrame(fields=d, attrs=attrs)
 
 
-def union(*args, alias="union"):
+def union_old(*args, alias="union"):
     """
     union -> q1, q2, q3
     fields["union"]

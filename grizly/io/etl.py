@@ -44,7 +44,7 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
 
     with open(csv_path, 'w', newline='', encoding = 'utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter=sep)
-        writer.writerow(qf.data["sql_blocks"]["select_aliases"]) 
+        writer.writerow(qf.data["select"]["sql_blocks"]["select_aliases"]) 
         writer.writerows(cursor.fetchall())
 
     cursor.close()
@@ -71,7 +71,7 @@ def create_table(qf, table, schema=''):
         print("Table {} already exists.".format(table_name))
 
     else:
-        sql_blocks = qf.data["sql_blocks"]
+        sql_blocks = qf.data["select"]["sql_blocks"]
         columns = []
         for item in range(len(sql_blocks["select_aliases"])):
             column = sql_blocks["select_aliases"][item] + ' ' + sql_blocks["types"][item]
