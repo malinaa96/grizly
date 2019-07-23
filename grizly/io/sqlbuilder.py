@@ -5,6 +5,7 @@ import copy
 
 
 def to_col_name(data, field, agg="", noas=False):
+    data = data["select"]
     col_name = data["table"] + "." + field
     if agg != "":
         col_name = "{}({}) as {}_{}".format(agg, col_name, agg, field)
@@ -27,7 +28,7 @@ def write(qf, table, drop=False):
             7, articleId, 1.50
             from article where name like 'ABC%';
     """
-    fields = qf.data["fields"]
+    fields = qf.data["select"]["fields"]
     columns = []
     if drop == False:
         for field in fields:
@@ -57,10 +58,7 @@ def to_sql(sql, engine_string):
 
 
 def build_column_strings(qf):
-    if 'fields' not in qf.data:
-        data = qf.data[list(qf.data.keys())[-1]]
-    else:
-        data = qf.data
+    data = copy.deepcopy(qf.data["select"])
     fields = {}
     fields_with_expr = {}
     for field in data["fields"]:
@@ -135,50 +133,65 @@ def build_column_strings(qf):
     data["sql_blocks"] = {"select_names":select_names, "select_aliases":select_aliases
                                 , "group_dimensions":group_dimensions, "group_values":group_values, "types": types}
     
-    if 'fields' not in qf.data:
-        qf.data[list(qf.data.keys())[-1]] = data
-    else:
-        qf.data = data
+    qf.data["select"] = data
     return qf
 
 def get_sql(qf):
-    # TODO: In case of joins we should use somewhere select_aliases.
     qf.create_sql_blocks()
-    if 'fields' not in qf.data:
-        data = qf.data[list(qf.data.keys())[-1]]
-    else:
-        data = qf.data
-    if "join" in data:
-        selects = ', '.join(data['sql_blocks']['select_names'])
-        iterator = 0
-        qf_copy = copy.deepcopy(qf)        
-        qf_copy.data = qf.data[f'pip{iterator+1}']
-        left_table = get_sql(qf_copy).sql
-        sql = f"SELECT {selects} FROM ({left_table}) pip{iterator+1}"
 
-        for join in data["join"]["on"]:
-            qf_copy.data = qf.data[f'pip{iterator+2}']
+    data = qf.data["select"]
+    sql = ''
+
+    if "union" in data:
+        iterator = 0 
+        qf_copy = copy.deepcopy(qf)  
+        qf_copy.data = qf.data[f'sq{iterator+1}']
+        sql += get_sql(qf_copy).sql
+
+        for union in data["union"]["union_type"]:
+            union_type = data["union"]["union_type"][iterator]
+            qf_copy.data = qf.data[f'sq{iterator+2}']
             right_table = get_sql(qf_copy).sql
-            join_type = data["join"]["join_type"][iterator]
-            on = data["join"]["on"][iterator]
-
-            sql += f" {join_type} ({right_table}) pip{iterator+2} ON {on}"
+            
+            sql += f" {union_type} {right_table}"
             iterator += 1
 
-    else:
+    elif "union" not in data:    
         selects = ', '.join(data['sql_blocks']['select_names'])
-        sql = "SELECT {}".format(selects)
-        if "schema" in data and data["schema"] != "":
-            sql += " FROM {}.{}".format(data["schema"],data["table"])
-        else: 
-            sql += " FROM {}".format(data["table"])
+        sql += f"SELECT {selects}"
+
+        if "table" in data:
+            if "schema" in data and data["schema"] != "":
+                sql += " FROM {}.{}".format(data["schema"],data["table"])
+            else: 
+                sql += " FROM {}".format(data["table"])
+
+        elif "join" in data:
+            iterator = 0
+            qf_copy = copy.deepcopy(qf)       
+            qf_copy.data = qf.data[f'sq{iterator+1}']
+            left_table = get_sql(qf_copy).sql
+            sql += f" FROM ({left_table}) sq{iterator+1}"
+
+            for join in data["join"]["join_type"]:
+                join_type = data["join"]["join_type"][iterator]
+                qf_copy.data = qf.data[f'sq{iterator+2}']
+                right_table = get_sql(qf_copy).sql
+                on = data["join"]["on"][iterator]
+
+                sql += f" {join_type} ({right_table}) sq{iterator+2}"
+                if on != 0:
+                    sql += f" ON {on}"
+                iterator += 1
+
         if "where" in data:
-                sql += " WHERE {}".format(data["where"])
+            sql += " WHERE {}".format(data["where"])
         if data['sql_blocks']['group_dimensions'] != []:
             group_names = ', '.join(data['sql_blocks']['group_dimensions'])
-            sql += " GROUP BY {}".format(group_names)
-        if "limit" in data:
-            sql += " LIMIT {}".format(data["limit"])
+            sql += f" GROUP BY {group_names}"
+
+    if "limit" in data:
+        sql += " LIMIT {}".format(data["limit"])
 
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
     qf.sql = sql
