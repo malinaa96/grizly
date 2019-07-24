@@ -78,7 +78,7 @@ class QFrame:
                 raise KeyError("Some of your columns don't have types.")
 
     def from_dict(self, data):
-        # self.validate_data(data)
+        self.validate_data(data)
         self.data = data
         return self
 
@@ -89,6 +89,7 @@ class QFrame:
         data["schema"] = schema
         data["table"] = table
         data = {"select": data}
+        self.validate_data(data)
         return QFrame(data=data)
 
     def create_sql_blocks(self):
@@ -116,7 +117,10 @@ class QFrame:
                                     "
 
         """
-        self.data["select"]["where"] = query
+        if "union" in self.data["select"]:
+            print("You can't add where clause inside union. Use select() method first.")
+        else:
+            self.data["select"]["where"] = query
         return self
 
     def assign(self, notable=False, type="dim", group_by="", **kwargs):
@@ -143,40 +147,74 @@ class QFrame:
                     "Value * 2"
 
         """
-        if kwargs is not None:
-            for key in kwargs:
-                if not notable:
-                    expression = prepend_table(self.data,kwargs[key])
-                else:
-                    expression = kwargs[key]
-                self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by":group_by, "expression": expression}
+        if "union" in self.data["select"]:
+            print("You can't assign expressions inside union. Use select() method first.")
+        else:
+            if kwargs is not None:
+                for key in kwargs:
+                    if not notable:
+                        expression = prepend_table(self.data,kwargs[key])
+                    else:
+                        expression = kwargs[key]
+                    self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by":group_by, "expression": expression}
         return self
 
     def groupby(self, fields):
-        for field in fields:
-            self.data["select"]["fields"][field]["group_by"] = "group"
+        if "union" in self.data["select"]:
+            print("You can't group by inside union. Use select() method first.")
+        else:
+            for field in fields:
+                self.data["select"]["fields"][field]["group_by"] = "group"
         return self
 
     def agg(self, aggtype):
-        if isinstance(self.getfields, str):
-            self.getfields = [self.getfields]
-        if aggtype in ["sum", "count"]:
-            for field in self.getfields:
-                self.data["select"]["fields"][field]["group_by"] = aggtype
-                self.data["select"]["fields"][field]["as"] = "sum_{}".format(field)
-            return self
+        if "union" in self.data["select"]:
+            print("You can't aggregate inside union. Use select() method first.")
         else:
-            return print("Aggregation type must be sum or count")
+            if isinstance(self.getfields, str):
+                self.getfields = [self.getfields]
+            if aggtype in ["sum", "count"]:
+                for field in self.getfields:
+                    self.data["select"]["fields"][field]["group_by"] = aggtype
+                    self.data["select"]["fields"][field]["as"] = "sum_{}".format(field)
+            else:
+                return print("Aggregation type must be sum or count")
+        return self
 
     def limit(self, limit):
         self.data["select"]["limit"] = str(limit)
         return self
 
-    def select(self):
+    def select(self, fields):
         """
         Creates a subquery that looks like select col1, col2 from (some sql)
+
+        Parameters:
+        ----------
+        fields : list
+            List of fields to select.
         """
-        # sql = get_sql()
+        sq_fields = self.data["select"]["fields"]
+        new_fields = {}
+
+        for field in fields:
+            if field not in sq_fields:
+                print(f"Field {field} not found")
+
+            elif "select"  in sq_fields[field] and sq_fields[field]["select"] == 0:
+                print(f"Field {field} is not selected in subquery.")
+
+            else:
+                alias = field if "as" not in sq_fields[field] else sq_fields[field]["as"]
+                new_fields[f"sq.{alias}"] = {"type": sq_fields[field]["type"], "as": alias}
+                if "custom_type" in sq_fields[field]:
+                    new_fields[f"sq.{alias}"]["custom_type"] = sq_fields[field]["custom_type"]
+
+        if new_fields: 
+            data = {"select": {"fields": new_fields }, "sq": self.data}
+            self.data = data
+
+        return self
 
     def rename(self, fields):
         """
@@ -212,7 +250,7 @@ class QFrame:
     
         """
         for field in fields:
-            self.data["select"]["fields"].pop(field, "Field not found.")
+            self.data["select"]["fields"].pop(field, f"Field {field} not found.")
         return self
 
     def to_html(self):
@@ -368,7 +406,7 @@ class QFrame:
         fields = self.data["select"]["fields"]
 
         for field in fields:
-            alias = fields[field]["as"]
+            alias =  field if  "as" not in fields[field] else fields[field]["as"]
             if alias in columns.keys():
                 columns[alias].append(field)
             else:
