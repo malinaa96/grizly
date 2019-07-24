@@ -15,6 +15,9 @@ os.environ["HTTPS_PROXY"] = store["https"]
 
 
 def check_if_exists(table, schema=''):
+    """
+    Checks if a table exists in Redshift.
+    """
     engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
     if schema == '':
         table_name = table
