@@ -184,6 +184,12 @@ def get_sql(qf):
                     sql += f" ON {on}"
                 iterator += 1
 
+        elif "table" not in data and "join" not in data:
+            qf_copy = copy.deepcopy(qf)       
+            qf_copy.data = qf.data["sq"]
+            sq = get_sql(qf_copy).sql
+            sql += f" FROM ({sq}) sq"
+
         if "where" in data:
             sql += " WHERE {}".format(data["where"])
         if data['sql_blocks']['group_dimensions'] != []:
