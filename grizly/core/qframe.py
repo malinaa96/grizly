@@ -32,6 +32,9 @@ class QFrame:
     data: dictionary structure holding fields, schema, table, sql
           information
 
+    db : {'Denodo', 'Redshift', 'MariaDB'}, default 'Denodo'
+        Name of database.
+
     field : Each field is a dictionary with these keys. For instance, a 
             query field inside fields definition could look like 
             
@@ -53,9 +56,10 @@ class QFrame:
             a subquery
     """
 
-    def __init__(self, data={}, sql="", getfields=[]):
+    def __init__(self, data={}, sql="", db='Denodo', getfields=[]):
         self.data = data
         self.sql = sql
+        self.db = db
         self.getfields = getfields  # remove this and put in data
         self.fieldattrs = ["type","as","group_by","expression","select","custom_type"]
         self.fieldtypes = ["dim","num"]
@@ -306,7 +310,7 @@ class QFrame:
         return self
 
 
-    def to_csv(self, csv_path, db='Denodo'):
+    def to_csv(self, csv_path):
         """
         Writes table to csv file.
 
@@ -314,14 +318,12 @@ class QFrame:
         ----------
         csv_path : string
             Path to csv file.
-        db : {'Denodo', 'Redshift'}, default 'Denodo'
-            Name of database.
         """
         if self.sql == '':
             self.create_sql_blocks()
             self.get_sql()
 
-        to_csv(self,csv_path,self.sql,db)
+        to_csv(self,csv_path,self.sql,self.db)
         return self
 
 
@@ -364,7 +366,7 @@ class QFrame:
         return self
 
         
-    def to_rds(self, table, csv_path, s3_name, schema='', db='Denodo', if_exists='fail', sep='\t'):
+    def to_rds(self, table, csv_path, s3_name, schema='', if_exists='fail', sep='\t'):
         """
         Writes table to Redshift database.
 
@@ -378,8 +380,6 @@ class QFrame:
             Name of s3.
         schema : string, optional
             Specify the schema.
-        db : {'Denodo', 'Redshift'}, default 'Denodo'
-            Name of database from which you want to load data.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
                 How to behave if the table already exists.
                 * fail: Raise a ValueError.
@@ -392,7 +392,7 @@ class QFrame:
             self.create_sql_blocks()
             self.get_sql()
             
-        to_csv(self,csv_path, self.sql, db=db, sep=sep)
+        to_csv(self,csv_path, self.sql, db=self.db, sep=sep)
         csv_to_s3(csv_path, s3_name)
         s3_to_rds(self, table, s3_name, schema=schema, if_exists=if_exists, sep='\t')
 
@@ -440,7 +440,8 @@ def join(qframes=[], join_type=[], on=[]):
 
     By default all fields from each QFrame in qframes are added to joined QFrame. 
     Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame. 
-    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFarme therefore after performing join please remove fields with the same aliases or change the aliases.
+    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFarme 
+    therefore after performing join please remove fields with the same aliases or change the aliases.
 
     Parameters:
     ----------
@@ -450,7 +451,8 @@ def join(qframes=[], join_type=[], on=[]):
         List of join types.
     on : list
         List of on join conditions. In case of CROSS JOIN set the condition on 0. 
-        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}" if you want to refer to the column. Check examples. 
+        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}" 
+        if you want to refer to the column. Check examples. 
 
     NOTE: Order of the elements in join_type and on list is important.
 
