@@ -21,7 +21,7 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
         Path to csv file.
     sql : string
         SQL query.
-    db : {'Denodo', 'Redshift'}, default 'Denodo'
+    db : {'Denodo', 'Redshift', 'MariaDB'}, default 'Denodo'
         Name of database.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
@@ -30,6 +30,8 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
         engine = create_engine(store["denodo"])
     elif db == 'Redshift':
         engine = create_engine(store["redshift"])
+    elif db == 'MariaDB':
+        engine = create_engine(store["mariadb"])
     else:
         raise ValueError("Invalid database.")
         
