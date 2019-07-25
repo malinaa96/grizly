@@ -18,7 +18,7 @@ def check_if_exists(table, schema=''):
     """
     Checks if a table exists in Redshift.
     """
-    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
+    engine = create_engine(store["redshift"], encoding='utf8')
     if schema == '':
         table_name = table
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
