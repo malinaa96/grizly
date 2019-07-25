@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 import pandas as pd
 import csv
-from grizly.core.utils import read_store
+from grizly.core.utils import read_store, check_if_exists
 
 
 store = read_store()
