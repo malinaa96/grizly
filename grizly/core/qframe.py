@@ -2,13 +2,18 @@ from IPython.display import HTML, display
 import pandas
 import re
 import os
-from grizly.io.sqlbuilder import get_sql, to_sql, build_column_strings
-from grizly.io.excel import read_excel
 import sqlparse
-from grizly.io.etl import *
-from grizly.core.utils import *
 import copy
 
+from grizly.io.sqlbuilder import (
+    get_sql, 
+    to_sql, 
+    build_column_strings
+)
+
+from grizly.io.excel import read_excel
+from grizly.io.etl import *
+from grizly.core.utils import *
 
 def prepend_table(data, expression):
     field_regex = r"\w+[a-z]"
@@ -88,11 +93,13 @@ class QFrame:
 
     def read_excel(self, excel_path, sheet_name="", query=""):
         schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
-        data = {}
-        data["fields"] = columns_qf
-        data["schema"] = schema
-        data["table"] = table
-        data = {"select": data}
+
+        data = {"select": {
+                    "fields": columns_qf,
+                    "schema": schema,
+                    "table": table
+                }}
+
         self.validate_data(data)
         return QFrame(data=data)
 
@@ -127,21 +134,17 @@ class QFrame:
             self.data["select"]["where"] = query
         return self
 
-    def assign(self, notable=False, type="dim", group_by="", **kwargs):
+    def assign(self, type="dim", group_by="", **kwargs):
         """
         Assign expressions.
 
         Parameters:
         ----------
-        notable : Boolean, default False
-            If False adds table name to columns names (eg. before: column1, after: table_name.column1). 
-            Note: For now it's not working with CASE statements, you should set True value then.
         type: {'dim', 'num'}, default 'dim
             Column type.
             * dim: VARCHAR(500)
             * num: FLOAT(53)
-        group_by : string, default ""
-            Note: For now not working.
+        group_by : {group, sum, count, min, max, avg, ""}, default ""
 
         Examples:
         --------
@@ -156,11 +159,8 @@ class QFrame:
         else:
             if kwargs is not None:
                 for key in kwargs:
-                    if not notable:
-                        expression = prepend_table(self.data,kwargs[key])
-                    else:
-                        expression = kwargs[key]
-                    self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by":group_by, "expression": expression}
+                    expression = kwargs[key]
+                    self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by": group_by, "expression": expression}
         return self
 
     def groupby(self, fields):
@@ -284,7 +284,7 @@ class QFrame:
 
     def get_sql(self, subquery=False):
         """
-        Overwrites the sql statement inside the class. Returns a class. To get sql use your_class_name.sql
+        Overwrites the sql statement inside the class. To get sql use your_class_name.sql
 
                 >>> q = QFrame().read_excel(excel_path, sheet_name, query)
                 >>> q.get_sql()
@@ -441,7 +441,7 @@ def join(qframes=[], join_type=[], on=[]):
     By default all fields from each QFrame in qframes are added to joined QFrame. 
     Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame. 
     If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFarme 
-    therefore after performing join please remove fields with the same aliases or change the aliases.
+    therefore after performing join please remove fields with the same aliases or rename the aliases.
 
     Parameters:
     ----------
@@ -608,55 +608,6 @@ def union(qframes=[], union_type=[]):
 
     print("Data unioned successfully.")
     return QFrame(data = data)
-
-
-def join_old(l_q, r_q, on, l_table="l_table", r_table="r_table"):
-    onstring = ""
-    count = 0
-    for tup in on:
-        count += 1
-        if count < len(on):
-            onstring += l_table + "." + tup[0] + "=" + r_table + "." + tup[1] + " and "
-        else:
-            onstring += l_table + "." + tup[0] + "=" + r_table + "." + tup[1]
-    l_q_sql = "({}) as {}".format(l_q.sql, l_table)
-    r_q_sql = "({}) as {}".format(r_q.sql, r_table)
-    sql = "({} JOIN {} ON {})".format(l_q_sql, r_q_sql, onstring)
-    sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
-    attrs = {"sql": sql}
-    d = {}
-    for l_field in l_q.fields:
-        field_new = l_table + "." + l_field
-        d[field_new] = l_q.fields[l_field]
-        # d[field_new]["as"] = field_new
-    for r_field in r_q.fields:
-        if r_field not in l_q.fields:
-            field_new = r_table + "." + r_field
-            d[field_new] = r_q.fields[r_field]
-    return QFrame(fields=d, attrs=attrs)
-
-
-def union_old(*args, alias="union"):
-    """
-    union -> q1, q2, q3
-    fields["union"]
-    keys: [field_name, type, group]
-    """
-    sql = ""
-    counter = 0
-    d = {}
-    for arg in args:
-        d = {**d, **arg.fields}
-        counter += 1
-        sql += "({})".format(arg.get_sql().sql)
-        if counter < len(args):
-            sql += " UNION "
-        else:
-            sql = "({}) AS {}".format(sql, alias)
-    sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
-    attrs = {"sql": sql}
-    q = QFrame(table=alias, fields=d, attrs=attrs)
-    return q
 
 
 
