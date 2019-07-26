@@ -58,6 +58,142 @@ def to_sql(sql, engine_string):
 
 
 def build_column_strings(qf):
+    select_names = []
+    select_aliases = []
+    group_dimensions = []
+    group_values = []
+    types = []
+
+    fields = qf.data["select"]["fields"]
+
+    for field in fields:
+        expr = field if "expression" not in fields[field] else fields[field]["expression"]
+        alias = field if "as" not in fields[field] else fields[field]["as"]
+
+        if "group_by" in fields[field]:
+            if fields[field]["group_by"] == "group":
+                group_dimensions.append(alias)
+
+            elif fields[field]["group_by"] == "":
+                pass
+
+            else:
+                if fields[field]["group_by"] == "sum":
+                    expr = f"sum({expr})" 
+                elif fields[field]["group_by"] == "count":
+                    expr = f"count({expr})" 
+                elif fields[field]["group_by"] == "max":
+                    expr = f"max({expr})" 
+                elif fields[field]["group_by"] == "min":
+                    expr = f"min({expr})" 
+                elif fields[field]["group_by"] == "avg":
+                    expr = f"avg({expr})" 
+                else:
+                    raise AttributeError("Invalid aggregation type.")
+                
+                group_values.append(alias)
+
+        if "select" not in fields[field] or "select" in fields[field] and fields[field]["select"] != 0:
+            select_name = field if expr == alias else f"{expr} as {alias}"
+
+            if "custom_type" in fields[field]:
+                type = fields[field]["custom_type"]
+            elif fields[field]["type"] == "dim":
+                type = "VARCHAR(500)"
+            elif fields[field]["type"] == "num":
+                type = "FLOAT(53)"
+
+            select_names.append(select_name)
+            select_aliases.append(alias)
+            types.append(type)
+
+    # validations 
+    # TODO: Check if the group by is correct - group by expression or columns in expression
+
+    # not_grouped = set(select_aliases) - set(group_values) - set(group_dimensions)
+    # if not_grouped:
+    #     raise AttributeError(f"Fields {not_grouped} must appear in the GROUP BY clause or be used in an aggregate function.")
+    
+    qf.data["select"]["sql_blocks"] = {
+                                        "select_names": select_names, 
+                                        "select_aliases": select_aliases, 
+                                        "group_dimensions": group_dimensions, 
+                                        "group_values": group_values, 
+                                        "types": types
+                                        }
+    
+    return qf
+
+def get_sql(qf):
+    qf.create_sql_blocks()
+
+    data = qf.data["select"]
+    sql = ''
+
+    if "union" in data:
+        iterator = 0 
+        qf_copy = copy.deepcopy(qf)  
+        qf_copy.data = qf.data[f'sq{iterator+1}']
+        sql += get_sql(qf_copy).sql
+
+        for union in data["union"]["union_type"]:
+            union_type = data["union"]["union_type"][iterator]
+            qf_copy.data = qf.data[f'sq{iterator+2}']
+            right_table = get_sql(qf_copy).sql
+            
+            sql += f" {union_type} {right_table}"
+            iterator += 1
+
+    elif "union" not in data:    
+        selects = ', '.join(data['sql_blocks']['select_names'])
+        sql += f"SELECT {selects}"
+
+        if "table" in data:
+            if "schema" in data and data["schema"] != "":
+                sql += " FROM {}.{}".format(data["schema"],data["table"])
+            else: 
+                sql += " FROM {}".format(data["table"])
+
+        elif "join" in data:
+            iterator = 0
+            qf_copy = copy.deepcopy(qf)       
+            qf_copy.data = qf.data[f'sq{iterator+1}']
+            left_table = get_sql(qf_copy).sql
+            sql += f" FROM ({left_table}) sq{iterator+1}"
+
+            for join in data["join"]["join_type"]:
+                join_type = data["join"]["join_type"][iterator]
+                qf_copy.data = qf.data[f'sq{iterator+2}']
+                right_table = get_sql(qf_copy).sql
+                on = data["join"]["on"][iterator]
+
+                sql += f" {join_type} ({right_table}) sq{iterator+2}"
+                if on != 0:
+                    sql += f" ON {on}"
+                iterator += 1
+
+        elif "table" not in data and "join" not in data:
+            qf_copy = copy.deepcopy(qf)       
+            qf_copy.data = qf.data["sq"]
+            sq = get_sql(qf_copy).sql
+            sql += f" FROM ({sq}) sq"
+
+        if "where" in data:
+            sql += " WHERE {}".format(data["where"])
+        if data['sql_blocks']['group_dimensions'] != []:
+            group_names = ', '.join(data['sql_blocks']['group_dimensions'])
+            sql += f" GROUP BY {group_names}"
+
+    if "limit" in data:
+        sql += " LIMIT {}".format(data["limit"])
+
+    sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
+    qf.sql = sql
+    return qf
+
+
+
+def build_column_strings_old(qf):
     data = copy.deepcopy(qf.data["select"])
     fields = {}
     fields_with_expr = {}
@@ -134,71 +270,4 @@ def build_column_strings(qf):
                                 , "group_dimensions":group_dimensions, "group_values":group_values, "types": types}
     
     qf.data["select"] = data
-    return qf
-
-def get_sql(qf):
-    qf.create_sql_blocks()
-
-    data = qf.data["select"]
-    sql = ''
-
-    if "union" in data:
-        iterator = 0 
-        qf_copy = copy.deepcopy(qf)  
-        qf_copy.data = qf.data[f'sq{iterator+1}']
-        sql += get_sql(qf_copy).sql
-
-        for union in data["union"]["union_type"]:
-            union_type = data["union"]["union_type"][iterator]
-            qf_copy.data = qf.data[f'sq{iterator+2}']
-            right_table = get_sql(qf_copy).sql
-            
-            sql += f" {union_type} {right_table}"
-            iterator += 1
-
-    elif "union" not in data:    
-        selects = ', '.join(data['sql_blocks']['select_names'])
-        sql += f"SELECT {selects}"
-
-        if "table" in data:
-            if "schema" in data and data["schema"] != "":
-                sql += " FROM {}.{}".format(data["schema"],data["table"])
-            else: 
-                sql += " FROM {}".format(data["table"])
-
-        elif "join" in data:
-            iterator = 0
-            qf_copy = copy.deepcopy(qf)       
-            qf_copy.data = qf.data[f'sq{iterator+1}']
-            left_table = get_sql(qf_copy).sql
-            sql += f" FROM ({left_table}) sq{iterator+1}"
-
-            for join in data["join"]["join_type"]:
-                join_type = data["join"]["join_type"][iterator]
-                qf_copy.data = qf.data[f'sq{iterator+2}']
-                right_table = get_sql(qf_copy).sql
-                on = data["join"]["on"][iterator]
-
-                sql += f" {join_type} ({right_table}) sq{iterator+2}"
-                if on != 0:
-                    sql += f" ON {on}"
-                iterator += 1
-
-        elif "table" not in data and "join" not in data:
-            qf_copy = copy.deepcopy(qf)       
-            qf_copy.data = qf.data["sq"]
-            sq = get_sql(qf_copy).sql
-            sql += f" FROM ({sq}) sq"
-
-        if "where" in data:
-            sql += " WHERE {}".format(data["where"])
-        if data['sql_blocks']['group_dimensions'] != []:
-            group_names = ', '.join(data['sql_blocks']['group_dimensions'])
-            sql += f" GROUP BY {group_names}"
-
-    if "limit" in data:
-        sql += " LIMIT {}".format(data["limit"])
-
-    sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
-    qf.sql = sql
     return qf
