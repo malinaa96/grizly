@@ -29,7 +29,7 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
     if db == 'Denodo':
         engine = create_engine(store["denodo"])
     elif db == 'Redshift':
-        engine = create_engine(store["redshift"])
+        engine = create_engine(store["redshift"], encoding='utf8',  poolclass=NullPool)
     elif db == 'MariaDB':
         engine = create_engine(store["mariadb"])
     else:
@@ -149,7 +149,7 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     sep : string, default '\t'
         Separator/delimiter in csv file.
     """
-    engine = create_engine(store["redshift"])
+    engine = create_engine(store["redshift"]),encoding='utf8', poolclass=NullPool)
     
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
@@ -192,7 +192,7 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t'):
         COLUMN TYPES: right now you need to do a DROP TABLE to
         change the column type, this needs to be changed TODO
     """
-    engine = create_engine(store["redshift"])
+    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
     s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
     bucket = s3.Bucket('teis-data')
     print('s3 bucket object created')

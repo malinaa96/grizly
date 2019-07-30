@@ -398,7 +398,7 @@ class QFrame:
 
         return self
 
-    def show_duplicates(self):
+    def show_duplicated_columns(self):
         """
         Shows duplicated columns.
         """
@@ -434,14 +434,16 @@ class QFrame:
         return self
 
 
-def join(qframes=[], join_type=[], on=[]):
+def join(qframes=[], join_type=[], on=[], unique_col=True):
     """
     Joins QFrame objects. Returns QFrame. 
 
-    By default all fields from each QFrame in qframes are added to joined QFrame. 
     Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame. 
-    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFarme 
-    therefore after performing join please remove fields with the same aliases or rename the aliases.
+    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFrame.     
+    
+    By default the joined QFrame will contain all fields from the first QFrame and all fields from the other QFrames 
+    which are not in the first QFrame. This approach prevents duplicates. If you want to choose the columns set unique_col=False and 
+    after performing join please remove fields with the same aliases or rename the aliases.
 
     Parameters:
     ----------
@@ -453,6 +455,9 @@ def join(qframes=[], join_type=[], on=[]):
         List of on join conditions. In case of CROSS JOIN set the condition on 0. 
         NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}" 
         if you want to refer to the column. Check examples. 
+    unique_col : boolean, default True
+        If True the joined QFrame will cotain all fields from the first QFrame and all fields from other QFrames which 
+        are not repeated. If False the joined QFrame will contain all fields from every QFrame.
 
     NOTE: Order of the elements in join_type and on list is important.
 
@@ -463,15 +468,6 @@ def join(qframes=[], join_type=[], on=[]):
         q2 -> fields: customer_id, orders as 'ord'
 
         >>> q_joined = join(qframes=[q1,q2], join_type=["LEFT JOIN"], on=["sq1.customer_id=sq2.customer_id"])
-
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
-                            sq2.customer_id as 'customer_id', sq2.ord as 'ord'
-
-        >>> q_joined.show_duplicates()
-            DUPLICATED COLUMNS: 
-                customer_id : ['sq1.customer_id', 'sq2.customer_id']
-
-        >>> q_joined.remove(['sq2.customer_id'])
 
         q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
                             sq2.ord as 'ord'
@@ -493,13 +489,13 @@ def join(qframes=[], join_type=[], on=[]):
         q2 -> fields: customer_id, orders as 'ord'
         q3 -> fields: id, orders, date
 
-        >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", INNER JOIN"], on=[0, "sq2.customer_id=sq3.id"])
+        >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", INNER JOIN"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
 
         q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
                             sq2.customer_id as 'customer_id', sq2.ord as 'ord',
                             sq3.id as 'id', sq3.orders as 'orders', sq3.date as 'date'
 
-        >>> q_joined.show_duplicates()
+        >>> q_joined.show_duplicated_columns()
             DUPLICATED COLUMNS: 
                 customer_id : ['sq1.customer_id', 'sq2.customer_id']
                 orders : ['sq1.orders', 'sq3.orders']
@@ -529,6 +525,7 @@ def join(qframes=[], join_type=[], on=[]):
     assert len(qframes) == len(join_type)+1 and len(join_type) == len(on), "Incorrect list size."
 
     data = {'select': {'fields': {} }}
+    aliases = []
 
     iterator = 0
     for q in qframes:
@@ -537,16 +534,22 @@ def join(qframes=[], join_type=[], on=[]):
         sq = q.data['select']
             
         for alias in sq["sql_blocks"]["select_aliases"]:
-            for field in sq["fields"]:
-                if field == alias or "as" in sq["fields"][field] and sq["fields"][field]["as"] == alias:
-                    data["select"]["fields"][f"sq{iterator}.{alias}"] = {"type": sq["fields"][field]["type"], "as": alias}
-                    if "custom_type" in sq["fields"][field]:
-                        data["select"]["fields"][f"sq{iterator}.{alias}"]["custom_type"] = sq["fields"][field]["custom_type"]
-                    break
+            if unique_col and alias in aliases:
+                continue
+            else:
+                aliases.append(alias)
+                for field in sq["fields"]:
+                    if field == alias or "as" in sq["fields"][field] and sq["fields"][field]["as"] == alias:
+                        data["select"]["fields"][f"sq{iterator}.{alias}"] = {"type": sq["fields"][field]["type"], "as": alias}
+                        if "custom_type" in sq["fields"][field]:
+                            data["select"]["fields"][f"sq{iterator}.{alias}"]["custom_type"] = sq["fields"][field]["custom_type"]
+                        break
                     
     data["select"]["join"] = { "join_type": join_type, "on": on}
 
-    print("Data joined successfully. Please remove or rename duplicated columns. Use your_qframe.show_duplicates() to check duplicates.")
+    print("Data joined successfully.")
+    if not unique_col:
+        print("Please remove or rename duplicated columns. Use your_qframe.show_duplicated_columns() to check duplicates.")
     return QFrame(data = data)
 
 
