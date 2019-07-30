@@ -2,6 +2,7 @@ import os
 import json
 from sqlalchemy import create_engine
 import pandas as pd
+from sqlalchemy.pool import NullPool
 
 
 def read_store():
@@ -19,7 +20,7 @@ def check_if_exists(table, schema=''):
     """
     Checks if a table exists in Redshift.
     """
-    engine = create_engine(store["redshift"], encoding='utf8')
+    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
     if schema == '':
         table_name = table
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
@@ -59,7 +60,7 @@ def delete_where(table, schema='', *argv):
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
-        engine = create_engine(store["redshift"])
+        engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
 
         if argv is not None:
             for arg in argv:
