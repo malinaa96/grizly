@@ -180,7 +180,8 @@ class QFrame:
             if aggtype in ["sum", "count"]:
                 for field in self.getfields:
                     self.data["select"]["fields"][field]["group_by"] = aggtype
-                    self.data["select"]["fields"][field]["as"] = "sum_{}".format(field)
+                    alias = field if "as" not in self.data["select"]["fields"][field] else self.data["select"]["fields"][field]["as"]
+                    self.data["select"]["fields"][field]["as"] = alias
             else:
                 return print("Aggregation type must be sum or count")
         return self
@@ -198,7 +199,7 @@ class QFrame:
         fields : list
             List of fields to select.
         """
-        sq_fields = self.data["select"]["fields"]
+        sq_fields = copy.deepcopy(self.data["select"]["fields"])
         new_fields = {}
 
         for field in fields:

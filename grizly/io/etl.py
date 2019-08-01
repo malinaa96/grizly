@@ -149,7 +149,7 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     sep : string, default '\t'
         Separator/delimiter in csv file.
     """
-    engine = create_engine(store["redshift"]),encoding='utf8', poolclass=NullPool)
+    engine = create_engine(store["redshift"],encoding='utf8', poolclass=NullPool)
     
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
