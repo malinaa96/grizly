@@ -180,11 +180,19 @@ def get_sql(qf):
 
         if "where" in data:
             sql += " WHERE {}".format(data["where"])
+
         if data['sql_blocks']['group_dimensions'] != []:
             group_names = ', '.join(data['sql_blocks']['group_dimensions'])
             sql += f" GROUP BY {group_names}"
 
-    if "limit" in data:
+    if "order_by" in data and data["order_by"] != {}:
+        orders = []
+        for order in data["order_by"]: 
+            orders.append("{} {}".format(order,data["order_by"][order]))
+        orders = ', '.join(orders)
+        sql += f" ORDER BY {orders}"
+
+    if "limit" in data and data["limit"] != '':
         sql += " LIMIT {}".format(data["limit"])
 
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")

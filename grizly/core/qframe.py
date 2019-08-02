@@ -190,6 +190,16 @@ class QFrame:
         self.data["select"]["limit"] = str(limit)
         return self
 
+    def orderby(self, fields={}):
+        for field in fields.keys():
+            if field in self.data["select"]["fields"]:
+                if "order_by" not in self.data["select"]:
+                    self.data["select"]["order_by"] = {}
+                self.data["select"]["order_by"][field] = fields[field]
+            else:
+                print(f"Field {field} not found.")
+        return self
+
     def select(self, fields):
         """
         Creates a subquery that looks like select col1, col2 from (some sql)
