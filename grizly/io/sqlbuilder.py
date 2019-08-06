@@ -145,8 +145,13 @@ def get_sql(qf):
             iterator += 1
 
     elif "union" not in data:    
+        sql += "SELECT"
+
+        if "distinct" in data and data["distinct"] == 1:
+            sql += " DISTINCT"
+
         selects = ', '.join(data['sql_blocks']['select_names'])
-        sql += f"SELECT {selects}"
+        sql += f" {selects}"
 
         if "table" in data:
             if "schema" in data and data["schema"] != "":
