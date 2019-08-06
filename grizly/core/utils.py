@@ -15,6 +15,18 @@ def read_store():
 store = read_store()
 os.environ["HTTPS_PROXY"] = store["https"]
 
+def columns_to_excel(table, excel_path, schema, db='denodo'):
+    query = f"""
+        SELECT column_name
+        FROM get_view_columns()
+        WHERE view_name = '{table}' 
+            AND database_name = '{schema}'
+        """
+
+    engine = create_engine(store[db])
+    col_names = pd.read_sql(query, engine)
+    col_names.to_excel(excel_path, index=False)
+    return "Columns saved in excel."
 
 def check_if_exists(table, schema=''):
     """

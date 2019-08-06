@@ -103,6 +103,8 @@ def csv_to_s3(csv_path, s3_name):
     s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
     bucket = s3.Bucket('teis-data')
 
+    if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
+
     bucket.upload_file(csv_path, s3_name)
     print('{} file uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
 
@@ -120,6 +122,8 @@ def s3_to_csv(s3_name, csv_path):
     """
     s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
     bucket = s3.Bucket('teis-data')
+
+    if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
 
     with open(csv_path, 'wb') as data:
         bucket.download_fileobj(s3_name, data)
@@ -165,17 +169,21 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
     else:
         create_table(qf, table, schema=schema)
 
-    print("Loading data into {} ...".format(table_name))
+    if s3_name[-4:] != '.csv': s3_name += '.csv'
+
+    print("Loading {} data into {} ...".format(s3_name,table_name))
 
     sql = """
         COPY {} FROM 's3://teis-data/{}' 
         access_key_id '{}' 
         secret_access_key '{}'
         delimiter '{}'
+        NULL ''
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
         """.format(table_name, s3_name, store["akey"], store["skey"], sep)
+
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
 

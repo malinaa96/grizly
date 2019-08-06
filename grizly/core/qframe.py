@@ -108,24 +108,23 @@ class QFrame:
 
     def query(self, query):
         """
-        Query
-        -----
         Creates a "where" attribute inside the data dictionary.
-        Prepends the table name to each column field. So
-        Country = 'Italy' becomes Orders.Country = 'Italy'
 
-        >>> orders = dict with order table fields
+        Parameters:
+        ----------
+        query : str
+            WHERE statement.
+
+        Examples:
+        --------
+        orders -> dict with order table fields
+
         >>> q = QFrame().from_dict(orders)
         >>> expr = q.query(
                             "country!='Italy' 
                                 and (Customer='Enel' or Customer='Agip')
                                 or Value>1000
                             ")
-        >>> assert expr.data["where"] == "
-                                    Orders.country!='Italy' 
-                                    and (Orders.Customer='Enel' or Orders.Customer='Agip')
-                                    or Orders.Value>1000
-                                    "
 
         """
         if "union" in self.data["select"]:
@@ -136,7 +135,7 @@ class QFrame:
 
     def assign(self, type="dim", group_by="", **kwargs):
         """
-        Assign expressions.
+        Assigns expressions.
 
         Parameters:
         ----------
@@ -164,6 +163,20 @@ class QFrame:
         return self
 
     def groupby(self, fields):
+        """
+        Adds GROUP BY statement.
+
+        Parameters:
+        ----------
+        fields : list
+            List of fields.
+            NOTE : You have to pass the name of the field not the alias.
+
+        Examples:
+        --------
+            >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
+
+        """
         if "union" in self.data["select"]:
             print("You can't group by inside union. Use select() method first.")
         else:
@@ -172,25 +185,75 @@ class QFrame:
         return self
 
     def agg(self, aggtype):
+        """
+        Aggregates fields.
+
+        Parameters:
+        ----------
+        aggtype : {'sum', 'count', 'min', 'max', 'avg'}
+            Aggregation type.
+
+        Examples:
+        --------
+                >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
+
+        """
         if "union" in self.data["select"]:
             print("You can't aggregate inside union. Use select() method first.")
         else:
             if isinstance(self.getfields, str):
                 self.getfields = [self.getfields]
-            if aggtype in ["sum", "count"]:
+            if aggtype in ["sum", "count", "min", "max", "avg"]:
                 for field in self.getfields:
                     self.data["select"]["fields"][field]["group_by"] = aggtype
                     alias = field if "as" not in self.data["select"]["fields"][field] else self.data["select"]["fields"][field]["as"]
                     self.data["select"]["fields"][field]["as"] = alias
             else:
-                return print("Aggregation type must be sum or count")
+                return print("Aggregation type must be sum, count, min, max or avg.")
         return self
 
     def limit(self, limit):
+        """
+        Adds LIMIT statement.
+
+        Parameters:
+        ----------
+        limit : int or str
+            Number of rows to select.
+        Examples:
+        --------
+                >>> q.limit(100)          
+        """
         self.data["select"]["limit"] = str(limit)
         return self
 
     def orderby(self, fields={}):
+        """
+        Adds ORDER BY statement.
+
+        Parameters:
+        ----------
+        fields : dict
+            Dictionary of fields. Keys: fields names, values: order (ASC or DESC, default ASC).
+
+        Examples:
+        --------
+            qframe:
+            q ->    fields : customer_id, date, bookings
+                    table : orders
+
+            >>> q.orderby({"customer_id" : "DESC", "date" : ""}))
+            >>> q.get_sql()
+            >>> print(q.sql)
+                SELECT  customer_id, 
+                        date,
+                        bookings
+                FROM 
+                    orders
+                ORDER BY
+                    customer_id DESC,
+                    date
+        """
         for field in fields.keys():
             if field in self.data["select"]["fields"]:
                 if "order_by" not in self.data["select"]:
@@ -202,12 +265,24 @@ class QFrame:
 
     def select(self, fields):
         """
-        Creates a subquery that looks like select col1, col2 from (some sql)
+        Creates a subquery that looks like "select sq.col1, sq.col2 from (some sql) sq.
+
+        NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created 
+        as a concat of "sq." and alias in the parent QFrame.
 
         Parameters:
         ----------
         fields : list
             List of fields to select.
+
+        Examples:
+        --------
+            qframe : 
+            q -> fields : customer_id as 'customer', date, order
+
+            >>> q.select(["customer_id", "order"])
+
+            q -> fields : sq.customer_id, sq.order
         """
         sq_fields = copy.deepcopy(self.data["select"]["fields"])
         new_fields = {}
@@ -268,6 +343,17 @@ class QFrame:
             self.data["select"]["fields"].pop(field, f"Field {field} not found.")
         return self
 
+    def distinct(self):
+        """
+        Adds DISTINCT statement.
+
+        Examples:
+        --------
+            >>> q.distinct()
+        """
+        self.data["select"]["distinct"] == 1
+        return self
+
     def to_html(self):
         from IPython.display import HTML, display
 
@@ -297,10 +383,13 @@ class QFrame:
         """
         Overwrites the sql statement inside the class. To get sql use your_class_name.sql
 
-                >>> q = QFrame().read_excel(excel_path, sheet_name, query)
-                >>> q.get_sql()
-                >>> sql = q.sql
-                >>> print(sql)
+        Examples:
+        --------
+
+            >>> q = QFrame().read_excel(excel_path, sheet_name, query)
+            >>> q.get_sql()
+            >>> sql = q.sql
+            >>> print(sql)
         """
         self.sql = get_sql(self).sql
         return self
@@ -464,7 +553,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
         List of join types.
     on : list
         List of on join conditions. In case of CROSS JOIN set the condition on 0. 
-        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}" 
+        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}." 
         if you want to refer to the column. Check examples. 
     unique_col : boolean, default True
         If True the joined QFrame will cotain all fields from the first QFrame and all fields from other QFrames which 
