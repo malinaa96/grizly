@@ -19,7 +19,7 @@ def columns_to_excel(table, excel_path, schema, db='denodo'):
     query = f"""
         SELECT column_name
         FROM get_view_columns()
-        WHERE view_name = '{table}' 
+        WHERE view_name = '{table}'
             AND database_name = '{schema}'
         """
 
@@ -39,14 +39,14 @@ def check_if_exists(table, schema=''):
     else:
         table_name = schema + '.' + table
         sql_exists = "select * from information_schema.tables where table_schema = '{}' and table_name = '{}' ". format(schema, table)
-        
+
     return not pd.read_sql_query(sql = sql_exists, con=engine).empty
 
 
 def delete_where(table, schema='', *argv):
     """
     Removes records from Redshift table which satisfy *argv.
-    
+
     Parameters:
     ----------
     table : string
@@ -87,4 +87,23 @@ def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
     """ Requires configuration of AWS CLI (in CMD: >>aws configure) """
 
     os.system("SET HTTPS_PROXY=nyc3.sme.zscalertwo.net:10156")
-    os.system(f"aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}") 
+    os.system(f"aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}")
+
+
+def copy_table(schema, copy_from, to, engine=None):
+
+    sql = f"""
+    DROP TABLE IF EXISTS {schema}.{to};
+    CREATE TABLE {schema}.{to} AS
+    SELECT * FROM {schema}.{copy_from}
+    """
+
+    print("Executing...")
+    print(sql)
+
+    if engine is None:
+        engine = create_engine(store["redshift"])
+
+    engine.execute(sql)
+
+    return "Success"
