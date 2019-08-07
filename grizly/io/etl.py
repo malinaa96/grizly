@@ -105,7 +105,7 @@ def csv_to_s3(csv_path, s3_name):
 
     if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
 
-    bucket.upload_file(csv_path, s3_name)
+    bucket.upload_file(csv_path, 'bulk/' + s3_name)
     print('{} file uploaded to s3 as {}'.format(os.path.basename(csv_path), s3_name))
 
 
@@ -126,19 +126,71 @@ def s3_to_csv(s3_name, csv_path):
     if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
 
     with open(csv_path, 'wb') as data:
-        bucket.download_fileobj(s3_name, data)
+        bucket.download_fileobj('bulk/' + s3_name, data)
     print('{} uploaded to {}'.format(s3_name, csv_path))
 
 
 
 
-def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
+def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=False):
+
+    """Copies a dataframe inside a Redshift schema.table
+        using the bulk upload via this process:
+        df -> local csv -> s3 csv -> redshift table
+
+        NOTE: currently this function performs a delete * in
+        the target table, append is in TODO list, also we
+        need to add a timestamp column
+
+        COLUMN TYPES: right now you need to do a DROP TABLE to
+        change the column type, this needs to be changed TODO
+    """
+
+    ACCESS_KEY = store['akey']
+    SECRET_KEY = store['skey']
+    REGION = store['region']
+
+    if engine is None:
+        engine = create_engine(store['redshift'], poolclass=NullPool)
+
+    s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
+    bucket = s3.Bucket('teis-data')
+
+    print('s3 bucket object created')
+
+
+    filename = table_name + '.csv'
+    filepath = os.path.join(os.getcwd(), filename)
+
+    df.columns = df.columns.str.strip().str.replace(" ", "_") # Redshift won't accept column names with spaces
+    df.to_csv(filepath, sep=sep, encoding='utf-8', index=False)
+    print(f'{filename} created in {filepath}')
+
+    bucket.upload_file(filepath, f"bulk/{filename}")
+    print(f'bulk/{filename} file uploaded to s3')
+
+    try:
+        if dtype !="":
+            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
+        else:
+            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
+    except:
+        engine = create_engine(store['redshift'])
+        if dtype !="":
+            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
+        else:
+            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
+
+
+
+def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
     """
     Writes s3 to Redshift database.
 
     Parameters:
     -----------
-    qf : QFrame object
+    qf : {None, QFrame}, default None
+        QFrame object or None  
     table : string
         Name of SQL table.
     s3_name : string
@@ -167,14 +219,15 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
         else:
             pass
     else:
-        create_table(qf, table, schema=schema)
+        if type(object) == QFrame:
+            create_table(qf, table, schema=schema)
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
 
     print("Loading {} data into {} ...".format(s3_name,table_name))
 
     sql = """
-        COPY {} FROM 's3://teis-data/{}' 
+        COPY {} FROM 's3://teis-data/bulk/{}' 
         access_key_id '{}' 
         secret_access_key '{}'
         delimiter '{}'
@@ -186,43 +239,3 @@ def s3_to_rds(qf, table, s3_name, schema='', if_exists='fail', sep='\t'):
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
-
-
-def df_to_s3(df, table_name, schema, dtype="", sep='\t'):
-    """Copies a dataframe inside a Redshift schema.table
-        using the bulk upload via this process:
-        df -> local csv -> s3 csv -> redshift table
-        
-        NOTE: currently this function performs a delete * in
-        the target table, append is in TODO list, also we
-        need to add a timestamp column
-        
-        COLUMN TYPES: right now you need to do a DROP TABLE to
-        change the column type, this needs to be changed TODO
-    """
-    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
-    s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
-    bucket = s3.Bucket('teis-data')
-    print('s3 bucket object created')
-    
-    filename = table_name + '.txt'
-    filepath = '1_Projects/ENG/sip_pmip_19/01/{}'.format(filename)
-    
-    df.to_csv(filepath, sep=sep, index=False)
-    print('{} created in {}'.format(filename, filepath))
-    
-    bucket.upload_file(filepath, "bulk/{}".format(filename))
-    print('bulk/{} file uploaded to s3'.format({filename}))
-    
-    try:
-        if dtype !="":
-            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
-        else:
-            df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
-    except ValueError:
-        pass
-
-
-
-
-

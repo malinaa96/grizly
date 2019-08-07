@@ -81,3 +81,10 @@ def delete_where(table, schema='', *argv):
                 print(f'Records from table {table_name} where {arg} has been removed successfully.')
     else:
         print(f"Table {table_name} doesn't exist.")
+
+
+def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
+    """ Requires configuration of AWS CLI (in CMD: >>aws configure) """
+
+    os.system("SET HTTPS_PROXY=nyc3.sme.zscalertwo.net:10156")
+    os.system(f"aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}") 
