@@ -106,6 +106,58 @@ class QFrame:
     def create_sql_blocks(self):
           return build_column_strings(self)
 
+
+    def rename(self, fields):
+        """
+        Renames columns.
+
+        Parameters:
+        -----------
+        fields : dict
+            Dictionary of columns and their new names.
+
+        Examples:
+        --------
+            >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
+    
+        """
+        for field in fields:
+            if field in self.data["select"]["fields"]:
+                self.data["select"]["fields"][field]["as"] = fields[field]
+        return self
+
+
+    def remove(self, fields):
+        """
+        Removes fields.
+
+        Parameters:
+        -----------
+        fields : list
+            List of fields to remove.
+
+        Examples:
+        --------
+            >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
+    
+        """
+        for field in fields:
+            self.data["select"]["fields"].pop(field, f"Field {field} not found.")
+        return self
+
+
+    def distinct(self):
+        """
+        Adds DISTINCT statement.
+
+        Examples:
+        --------
+            >>> q.distinct()
+        """
+        self.data["select"]["distinct"] = 1
+        return self
+
+
     def query(self, query):
         """
         Creates a "where" attribute inside the data dictionary.
@@ -132,6 +184,7 @@ class QFrame:
         else:
             self.data["select"]["where"] = query
         return self
+
 
     def assign(self, type="dim", group_by="", **kwargs):
         """
@@ -162,6 +215,7 @@ class QFrame:
                     self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by": group_by, "expression": expression}
         return self
 
+
     def groupby(self, fields):
         """
         Adds GROUP BY statement.
@@ -183,6 +237,7 @@ class QFrame:
             for field in fields:
                 self.data["select"]["fields"][field]["group_by"] = "group"
         return self
+
 
     def agg(self, aggtype):
         """
@@ -212,20 +267,6 @@ class QFrame:
                 return print("Aggregation type must be sum, count, min, max or avg.")
         return self
 
-    def limit(self, limit):
-        """
-        Adds LIMIT statement.
-
-        Parameters:
-        ----------
-        limit : int or str
-            Number of rows to select.
-        Examples:
-        --------
-                >>> q.limit(100)          
-        """
-        self.data["select"]["limit"] = str(limit)
-        return self
 
     def orderby(self, fields={}):
         """
@@ -262,6 +303,23 @@ class QFrame:
             else:
                 print(f"Field {field} not found.")
         return self
+        
+
+    def limit(self, limit):
+        """
+        Adds LIMIT statement.
+
+        Parameters:
+        ----------
+        limit : int or str
+            Number of rows to select.
+        Examples:
+        --------
+                >>> q.limit(100)          
+        """
+        self.data["select"]["limit"] = str(limit)
+        return self
+
 
     def select(self, fields):
         """
@@ -305,54 +363,37 @@ class QFrame:
             self.data = data
 
         return self
-
-    def rename(self, fields):
-        """
-        Renames columns.
-
-        Parameters:
-        -----------
-        fields : dict
-            Dictionary of columns and their new names.
-
-        Examples:
-        --------
-            >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
     
-        """
-        for field in fields:
-            if field in self.data["select"]["fields"]:
-                self.data["select"]["fields"][field]["as"] = fields[field]
-        return self
-
-    def remove(self, fields):
-        """
-        Removes fields.
-
-        Parameters:
-        -----------
-        fields : list
-            List of fields to remove.
-
-        Examples:
-        --------
-            >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
     
+    def show_duplicated_columns(self):
         """
+        Shows duplicated columns.
+        """
+        columns = {}
+        fields = self.data["select"]["fields"]
+
         for field in fields:
-            self.data["select"]["fields"].pop(field, f"Field {field} not found.")
+            alias =  field if  "as" not in fields[field] else fields[field]["as"]
+            if alias in columns.keys():
+                columns[alias].append(field)
+            else:
+                columns[alias] = [field]
+
+        duplicates = copy.deepcopy(columns)
+        for alias in columns.keys():
+            if len(columns[alias]) == 1:
+                duplicates.pop(alias)
+
+        if duplicates != {}:
+            print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
+            for key in duplicates.keys():
+                print("\033[1m", key, "\033[0m", ":\t", duplicates[key], "\n")
+            print("Use your_qframe.remove() to remove or your_qframe.rename() to rename columns.")
+
+        else:
+            print("There are no duplicated columns.")
         return self
 
-    def distinct(self):
-        """
-        Adds DISTINCT statement.
-
-        Examples:
-        --------
-            >>> q.distinct()
-        """
-        self.data["select"]["distinct"] == 1
-        return self
 
     def to_html(self):
         from IPython.display import HTML, display
@@ -371,6 +412,7 @@ class QFrame:
         html_table += "</table>"
         display(HTML(html_table))
 
+
     def to_sql(self, engine_string=""):  # put engine_string in fields as meta
         sql = self.sql
         if engine_string != "":
@@ -378,6 +420,7 @@ class QFrame:
         else:
             df = to_sql(sql, self.data["engine_string"])
         return df
+
 
     def get_sql(self, subquery=False):
         """
@@ -419,9 +462,8 @@ class QFrame:
         csv_path : string
             Path to csv file.
         """
-        if self.sql == '':
-            self.create_sql_blocks()
-            self.get_sql()
+
+        self.get_sql()
 
         to_csv(self,csv_path,self.sql,self.db)
         return self
@@ -488,43 +530,13 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        if self.sql == '':
-            self.create_sql_blocks()
-            self.get_sql()
+
+        self.get_sql()
             
         to_csv(self,csv_path, self.sql, db=self.db, sep=sep)
         csv_to_s3(csv_path, s3_name)
         s3_to_rds(self, table, s3_name, schema=schema, if_exists=if_exists, sep='\t')
 
-        return self
-
-    def show_duplicated_columns(self):
-        """
-        Shows duplicated columns.
-        """
-        columns = {}
-        fields = self.data["select"]["fields"]
-
-        for field in fields:
-            alias =  field if  "as" not in fields[field] else fields[field]["as"]
-            if alias in columns.keys():
-                columns[alias].append(field)
-            else:
-                columns[alias] = [field]
-
-        duplicates = copy.deepcopy(columns)
-        for alias in columns.keys():
-            if len(columns[alias]) == 1:
-                duplicates.pop(alias)
-
-        if duplicates != {}:
-            print("\033[1m", "DUPLICATED COLUMNS: \n", "\033[0m")
-            for key in duplicates.keys():
-                print("\033[1m", key, "\033[0m", ":\t", duplicates[key], "\n")
-            print("Use your_qframe.remove() to remove or your_qframe.rename() to rename columns.")
-
-        else:
-            print("There are no duplicated columns.")
         return self
 
 
