@@ -55,10 +55,6 @@ class QFrame:
             group. If it's a num it can be any group agg (sum, count, max, min, etc.)
             * expression: if this is a calculated field, this is an sql expression like
             column_name * 2 or 'string_value' etc.
-    other data attributes:
-            * schema: the schema name
-            * table: the table name, this will be the table alias if the field is from
-            a subquery
     """
 
     def __init__(self, data={}, sql="", db='Denodo', getfields=[]):
@@ -222,20 +218,25 @@ class QFrame:
 
         Parameters:
         ----------
-        fields : list
-            List of fields.
+        fields : list or string
+            List of fields or a field.
             NOTE : You have to pass the name of the field not the alias.
 
         Examples:
         --------
             >>> q.groupby(["Order", "Customer"])["Value"].agg("sum")
 
+        --------
+        >>> q.groupby("Order")["Value"].agg("sum")
+
         """
-        if "union" in self.data["select"]:
-            print("You can't group by inside union. Use select() method first.")
-        else:
-            for field in fields:
-                self.data["select"]["fields"][field]["group_by"] = "group"
+        assert "union" not in self.data["select"], "You can't group by inside union. Use select() method first."
+
+        if isinstance(fields, str):
+            fields = [fields]
+        for field in fields:
+            self.data["select"]["fields"][field]["group_by"] = "group"
+
         return self
 
 
@@ -256,26 +257,30 @@ class QFrame:
         if "union" in self.data["select"]:
             print("You can't aggregate inside union. Use select() method first.")
         else:
-            if isinstance(self.getfields, str):
-                self.getfields = [self.getfields]
+            if isinstance(*self.getfields, tuple):
+                self.getfields = list(*self.getfields)
+
             if aggtype in ["sum", "count", "min", "max", "avg"]:
                 for field in self.getfields:
-                    self.data["select"]["fields"][field]["group_by"] = aggtype
-                    alias = field if "as" not in self.data["select"]["fields"][field] else self.data["select"]["fields"][field]["as"]
-                    self.data["select"]["fields"][field]["as"] = alias
+                    if field in self.data["select"]["fields"]:
+                        self.data["select"]["fields"][field]["group_by"] = aggtype
+                    else:
+                        print("Field not found.")
             else:
                 return print("Aggregation type must be sum, count, min, max or avg.")
         return self
 
 
-    def orderby(self, fields={}):
+    def orderby(self, fields, ascending=True):
         """
         Adds ORDER BY statement.
 
         Parameters:
         ----------
-        fields : dict
-            Dictionary of fields. Keys: fields names, values: order (ASC or DESC, default ASC).
+        fields : list or string
+            Fields in list or field as a string.
+        ascending : boolean or list, default True
+            Sort ascending vs. descending. Specify list for multiple sort orders.
 
         Examples:
         --------
@@ -283,25 +288,44 @@ class QFrame:
             q ->    fields : customer_id, date, bookings
                     table : orders
 
-            >>> q.orderby({"customer_id" : "DESC", "date" : ""}))
-            >>> q.get_sql()
-            >>> print(q.sql)
-                SELECT  customer_id, 
-                        date,
-                        bookings
-                FROM 
-                    orders
-                ORDER BY
-                    customer_id DESC,
-                    date
+                >>> q.orderby(["customer_id", "date"], [False, True])
+                >>> q.get_sql()
+                >>> print(q.sql)
+                    SELECT  customer_id, 
+                            date,
+                            bookings
+                    FROM 
+                        orders
+                    ORDER BY
+                        customer_id DESC,
+                        date
+            --------
+
+                >>> q.orderby("customer_id")
+                >>> q.get_sql()
+                >>> print(q.sql)
+                    SELECT  customer_id, 
+                            date,
+                            bookings
+                    FROM 
+                        orders
+                    ORDER BY
+                        customer_id
         """
-        for field in fields.keys():
+        if isinstance(fields, str) : fields = [fields]
+        if isinstance(ascending, bool) : ascending = [ascending for item in fields]
+
+        assert len(fields) == len(ascending), "Incorrect list size."
+
+        iterator = 0
+        for field in fields:
             if field in self.data["select"]["fields"]:
-                if "order_by" not in self.data["select"]:
-                    self.data["select"]["order_by"] = {}
-                self.data["select"]["order_by"][field] = fields[field]
+                order = 'ASC' if ascending[iterator] else 'DESC'
+                self.data["select"]["fields"][field]["order_by"] = order
             else:
                 print(f"Field {field} not found.")
+
+            iterator+=1
         return self
         
 
