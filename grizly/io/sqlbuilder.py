@@ -4,16 +4,6 @@ from sqlalchemy import create_engine
 import copy
 
 
-def to_col_name(data, field, agg="", noas=False):
-    data = data["select"]
-    col_name = data["table"] + "." + field
-    if agg != "":
-        col_name = "{}({}) as {}_{}".format(agg, col_name, agg, field)
-    else:
-        if "as" in data["fields"][field] and noas is False:
-            col_name += " as {}".format(data["fields"][field]["as"])
-    return col_name
-
 
 def write(qf, table, drop=False):
     """
@@ -62,6 +52,7 @@ def build_column_strings(qf):
     select_aliases = []
     group_dimensions = []
     group_values = []
+    order_by = []
     types = []
 
     fields = qf.data["select"]["fields"]
@@ -102,6 +93,10 @@ def build_column_strings(qf):
                 type = "VARCHAR(500)"
             elif fields[field]["type"] == "num":
                 type = "FLOAT(53)"
+            
+            if "order_by" in fields[field]:
+                order = fields[field]["order_by"]  if fields[field]["order_by"].upper() == 'DESC' else ''
+                order_by.append(f"{alias} {order}")
 
             select_names.append(select_name)
             select_aliases.append(alias)
@@ -109,16 +104,17 @@ def build_column_strings(qf):
 
     # validations 
     # TODO: Check if the group by is correct - group by expression or columns in expression
-
-    # not_grouped = set(select_aliases) - set(group_values) - set(group_dimensions)
-    # if not_grouped:
-    #     raise AttributeError(f"Fields {not_grouped} must appear in the GROUP BY clause or be used in an aggregate function.")
+    # if group_values != []:
+    #     not_grouped = set(select_aliases) - set(group_values) - set(group_dimensions)
+    #     if not_grouped:
+    #         raise AttributeError(f"Fields {not_grouped} must appear in the GROUP BY clause or be used in an aggregate function.")
     
     qf.data["select"]["sql_blocks"] = {
                                         "select_names": select_names, 
                                         "select_aliases": select_aliases, 
                                         "group_dimensions": group_dimensions, 
                                         "group_values": group_values, 
+                                        "order_by": order_by,
                                         "types": types
                                         }
     
@@ -190,12 +186,9 @@ def get_sql(qf):
             group_names = ', '.join(data['sql_blocks']['group_dimensions'])
             sql += f" GROUP BY {group_names}"
 
-    if "order_by" in data and data["order_by"] != {}:
-        orders = []
-        for order in data["order_by"]: 
-            orders.append("{} {}".format(order,data["order_by"][order]))
-        orders = ', '.join(orders)
-        sql += f" ORDER BY {orders}"
+    if data["sql_blocks"]["order_by"] != []:
+        order_by = ', '.join(data["sql_blocks"]["order_by"])
+        sql += f" ORDER BY {order_by}"
 
     if "limit" in data and data["limit"] != '':
         sql += " LIMIT {}".format(data["limit"])
@@ -204,83 +197,3 @@ def get_sql(qf):
     qf.sql = sql
     return qf
 
-
-
-def build_column_strings_old(qf):
-    data = copy.deepcopy(qf.data["select"])
-    fields = {}
-    fields_with_expr = {}
-    for field in data["fields"]:
-        try:
-            data["fields"][field]["expression"]
-            fields_with_expr[field] = data["fields"][field]
-        except KeyError:
-            fields[field] = data["fields"][field]
-    select_names = []
-    select_aliases = []
-    group_dimensions = []
-    group_values = []
-    types = []
-    for field_key in fields:
-
-        # column_name = data["table"] +"."+field_key
-        column_name = field_key
-        if 'group_by' in fields[field_key] and fields[field_key]["group_by"] != "":
-            if fields[field_key]["group_by"] != 'group':
-                try:
-                    alias = fields[field_key]["as"]
-                except KeyError:
-                    # alias = "{}_{}".format(fields[field_key]["group_by"], field_key)
-                    alias = field_key
-                group_value = "{}({}) as {}".format(fields[field_key]["group_by"], column_name, alias)
-                group_values.append(group_value)
-                select_names.append(group_value)
-                select_aliases.append(alias)
-                try:
-                    types.append(fields[field_key]["custom_type"])
-                except KeyError:
-                    if fields[field_key]["type"] == "dim":
-                        types.append("VARCHAR(500)")
-                    if fields[field_key]["type"] == "num":
-                        types.append("FLOAT(53)")
-            else:
-                group_dimension = column_name
-                group_dimensions.append(group_dimension)
-        if 'group_by' not in fields[field_key] or fields[field_key]["group_by"] == "" or fields[field_key]["group_by"] == 'group':
-            try:
-                fields[field_key]["select"]
-            except:
-                try:
-                    alias = fields[field_key]["as"]
-                    select_name = column_name + " as "+ alias
-                except KeyError:
-                    alias = field_key
-                    select_name = column_name
-                try:
-                    types.append(fields[field_key]["custom_type"])
-                except KeyError:
-                    if fields[field_key]["type"] == "dim":
-                        types.append("VARCHAR(500)")
-                    if fields[field_key]["type"] == "num":
-                        types.append("FLOAT(53)")
-                select_names.append(select_name)
-                select_aliases.append(alias)
-    
-    for field in fields_with_expr:
-        try:
-            types.append(fields_with_expr[field]["custom_type"])
-        except KeyError:
-            if fields_with_expr[field]["type"] == "dim":
-                types.append("VARCHAR(500)")
-            if fields_with_expr[field]["type"] == "num":
-                types.append("FLOAT(53)")
-        expr = fields_with_expr[field]["expression"]
-        select_name = expr +" as "+field
-        select_names.append(select_name)
-        select_aliases.append(field)
-
-    data["sql_blocks"] = {"select_names":select_names, "select_aliases":select_aliases
-                                , "group_dimensions":group_dimensions, "group_values":group_values, "types": types}
-    
-    qf.data["select"] = data
-    return qf

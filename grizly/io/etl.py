@@ -4,11 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 import pandas as pd
 import csv
-from grizly.core.utils import read_store, check_if_exists
+from grizly.core.utils import read_config, check_if_exists
 
 
-store = read_store()
-os.environ["HTTPS_PROXY"] = store["https"]
+config = read_config()
+os.environ["HTTPS_PROXY"] = config["https"]
 
 
 def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
@@ -27,11 +27,11 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
         Separtor/delimiter in csv file.
     """
     if db == 'Denodo':
-        engine = create_engine(store["denodo"])
+        engine = create_engine(config["denodo"])
     elif db == 'Redshift':
-        engine = create_engine(store["redshift"], encoding='utf8',  poolclass=NullPool)
+        engine = create_engine(config["redshift"], encoding='utf8',  poolclass=NullPool)
     elif db == 'MariaDB':
-        engine = create_engine(store["mariadb"])
+        engine = create_engine(config["mariadb"])
     else:
         raise ValueError("Invalid database.")
         
@@ -65,7 +65,7 @@ def create_table(qf, table, schema=''):
     schema : string, optional
         Specify the schema.
     """
-    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
+    engine = create_engine(config["redshift"], encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}' 
 
@@ -100,7 +100,7 @@ def csv_to_s3(csv_path, s3_name):
     s3_name : string
         Name of s3. 
     """
-    s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
+    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
 
     if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -120,7 +120,7 @@ def s3_to_csv(s3_name, csv_path):
     csv_path : string
         Path to csv file.
     """
-    s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
+    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
 
     if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -146,12 +146,12 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
         change the column type, this needs to be changed TODO
     """
 
-    ACCESS_KEY = store['akey']
-    SECRET_KEY = store['skey']
-    REGION = store['region']
+    ACCESS_KEY = config['akey']
+    SECRET_KEY = config['skey']
+    REGION = config['region']
 
     if engine is None:
-        engine = create_engine(store['redshift'], poolclass=NullPool)
+        engine = create_engine(config['redshift'], poolclass=NullPool)
 
     s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
     bucket = s3.Bucket('teis-data')
@@ -175,7 +175,7 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
         else:
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
     except:
-        engine = create_engine(store['redshift'])
+        engine = create_engine(config['redshift'])
         if dtype !="":
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
         else:
@@ -205,7 +205,7 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
     sep : string, default '\t'
         Separator/delimiter in csv file.
     """
-    engine = create_engine(store["redshift"],encoding='utf8', poolclass=NullPool)
+    engine = create_engine(config["redshift"],encoding='utf8', poolclass=NullPool)
     
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
@@ -235,7 +235,7 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
-        """.format(table_name, s3_name, store["akey"], store["skey"], sep)
+        """.format(table_name, s3_name, config["akey"], config["skey"], sep)
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
