@@ -2,7 +2,8 @@ from .api import (
     QFrame, 
     union, 
     join,
-    read_store,
+    read_config,
     check_if_exists,
-    delete_where
+    delete_where,
+	columns_to_excel
 )
