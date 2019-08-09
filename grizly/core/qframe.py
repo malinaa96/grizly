@@ -66,7 +66,7 @@ class QFrame:
         self.fieldattrs = ["type","as","group_by","expression","select","custom_type"]
         self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
-        self.save_data()
+        # self.save_data()
 
     # def save_data(self):
     #     json_path = os.path.join(os.getcwd(), 'json', 'qframe_data.json')
@@ -537,7 +537,7 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        s3_to_rds(self, table, s3_name, schema=schema , if_exists=if_exists, sep=sep)
+        s3_to_rds(table, s3_name, qf=self, schema=schema , if_exists=if_exists, sep=sep)
         return self
 
         
@@ -568,7 +568,7 @@ class QFrame:
             
         to_csv(self,csv_path, self.sql, db=self.db, sep=sep)
         csv_to_s3(csv_path, s3_name)
-        s3_to_rds(self, table, s3_name, schema=schema, if_exists=if_exists, sep='\t')
+        s3_to_rds(table, s3_name, qf=self, schema=schema, if_exists=if_exists, sep='\t')
 
         return self
 
