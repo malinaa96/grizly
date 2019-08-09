@@ -18,7 +18,6 @@ from grizly.core.utils import (
 )
 
 
-
 def test_check_if_exists():
     assert check_if_exists('fiscal_calendar_weeks','baseviews') == True
 
