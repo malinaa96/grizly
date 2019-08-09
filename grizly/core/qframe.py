@@ -4,6 +4,7 @@ import re
 import os
 import sqlparse
 import copy
+import json
 
 from grizly.io.sqlbuilder import (
     get_sql, 
@@ -65,6 +66,14 @@ class QFrame:
         self.fieldattrs = ["type","as","group_by","expression","select","custom_type"]
         self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
+        self.save_data()
+
+    # def save_data(self):
+    #     json_path = os.path.join(os.getcwd(), 'json', 'qframe_data.json')
+    #     # print(self.data)
+    #     with open(json_path, 'w') as f:
+    #         json.dump(self.data, f)
+
 
     def validate_data(self, data):
         # validating fields, need to validate other stuff too
