@@ -66,13 +66,25 @@ class QFrame:
         self.fieldattrs = ["type","as","group_by","expression","select","custom_type"]
         self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
-        # self.save_data()
+        #self.save_json
 
-    # def save_data(self):
-    #     json_path = os.path.join(os.getcwd(), 'json', 'qframe_data.json')
-    #     # print(self.data)
-    #     with open(json_path, 'w') as f:
-    #         json.dump(self.data, f)
+
+    def save_json(self, json_path=''):
+        json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
+        with open(json_path, 'w') as f:
+            json.dump(self.data, f)
+        print(f"Data saved in {json_path}")
+
+
+    def read_json(self, json_path=''):
+        json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+                self.validate_data(data)
+                self.data = data
+        except FileNotFoundError:
+            raise FielNotFoundError(f"File {json_path} not found")
 
 
     def validate_data(self, data):
@@ -91,11 +103,14 @@ class QFrame:
             else:
                 raise KeyError("Some of your columns don't have types.")
 
+   
     def from_dict(self, data):
         self.validate_data(data)
         self.data = data
+        ##self.save_json
         return self
 
+       
     def read_excel(self, excel_path, sheet_name="", query=""):
         schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
 
@@ -106,10 +121,13 @@ class QFrame:
                 }}
 
         self.validate_data(data)
+        #self.save_json
         return QFrame(data=data)
 
+
     def create_sql_blocks(self):
-          return build_column_strings(self)
+        #self.save_json
+        return build_column_strings(self)
 
 
     def rename(self, fields):
@@ -129,6 +147,7 @@ class QFrame:
         for field in fields:
             if field in self.data["select"]["fields"]:
                 self.data["select"]["fields"][field]["as"] = fields[field]
+        #self.save_json
         return self
 
 
@@ -148,6 +167,7 @@ class QFrame:
         """
         for field in fields:
             self.data["select"]["fields"].pop(field, f"Field {field} not found.")
+        #self.save_json
         return self
 
 
@@ -160,6 +180,7 @@ class QFrame:
             >>> q.distinct()
         """
         self.data["select"]["distinct"] = 1
+        #self.save_json
         return self
 
 
@@ -188,6 +209,7 @@ class QFrame:
             print("You can't add where clause inside union. Use select() method first.")
         else:
             self.data["select"]["where"] = query
+        #self.save_json
         return self
 
 
@@ -218,6 +240,7 @@ class QFrame:
                 for key in kwargs:
                     expression = kwargs[key]
                     self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by": group_by, "expression": expression}
+        #self.save_json
         return self
 
 
@@ -246,6 +269,7 @@ class QFrame:
         for field in fields:
             self.data["select"]["fields"][field]["group_by"] = "group"
 
+        #self.save_json
         return self
 
 
@@ -277,6 +301,7 @@ class QFrame:
                         print("Field not found.")
             else:
                 return print("Aggregation type must be sum, count, min, max or avg.")
+        #self.save_json
         return self
 
 
@@ -335,6 +360,8 @@ class QFrame:
                 print(f"Field {field} not found.")
 
             iterator+=1
+
+        #self.save_json
         return self
         
 
@@ -351,6 +378,8 @@ class QFrame:
                 >>> q.limit(100)          
         """
         self.data["select"]["limit"] = str(limit)
+
+        #self.save_json
         return self
 
 
@@ -395,6 +424,7 @@ class QFrame:
             data = {"select": {"fields": new_fields }, "sq": self.data}
             self.data = data
 
+        #self.save_json
         return self
     
     
@@ -427,32 +457,6 @@ class QFrame:
             print("There are no duplicated columns.")
         return self
 
-
-    def to_html(self):
-        from IPython.display import HTML, display
-
-        html_table = "<table>"
-        header = "\n".join(["<th>{}</th>".format(th) for th in self.fieldattrs])
-        html_table += "<tr><th>{}</th></tr>".format(header)
-        for field in self.fields:
-            html_table += """<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>
-                """.format(
-                field,
-                self.fields[field]["type"],
-                self.fields[field]["group_by"],
-                self.fields[field]["where"],
-            )
-        html_table += "</table>"
-        display(HTML(html_table))
-
-
-    def to_sql(self, engine_string=""):  # put engine_string in fields as meta
-        sql = self.sql
-        if engine_string != "":
-            df = to_sql(sql, engine_string)
-        else:
-            df = to_sql(sql, self.data["engine_string"])
-        return df
 
 
     def get_sql(self, subquery=False):
@@ -572,12 +576,40 @@ class QFrame:
 
         return self
 
+    # old
+    def to_html(self):
+        from IPython.display import HTML, display
+
+        html_table = "<table>"
+        header = "\n".join(["<th>{}</th>".format(th) for th in self.fieldattrs])
+        html_table += "<tr><th>{}</th></tr>".format(header)
+        for field in self.fields:
+            html_table += """<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>
+                """.format(
+                field,
+                self.fields[field]["type"],
+                self.fields[field]["group_by"],
+                self.fields[field]["where"],
+            )
+        html_table += "</table>"
+        display(HTML(html_table))
+
+
+    def to_sql(self, engine_string=""):  # put engine_string in fields as meta
+        sql = self.sql
+        if engine_string != "":
+            df = to_sql(sql, engine_string)
+        else:
+            df = to_sql(sql, self.data["engine_string"])
+        return df
+
 
     def __getitem__(self, getfields):
         self.getfields = []
         self.getfields.append(getfields)
         return self
 
+    
 
 def join(qframes=[], join_type=[], on=[], unique_col=True):
     """
@@ -674,6 +706,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
 
     iterator = 0
     for q in qframes:
+        q.create_sql_blocks()
         iterator += 1
         data[f"sq{iterator}"] = q.data
         sq = q.data['select']

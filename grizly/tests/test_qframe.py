@@ -52,6 +52,34 @@ customers = {
     }
 }
 
+playlists = {
+    "select": {
+        "fields":{
+            "PlaylistId": {
+                "type" : "dim"
+            },
+            "Name": {
+                "type" : "dim" 
+            }
+        },
+        "table" : "playlists"
+    }
+}
+
+playlist_track = {
+    "select": {
+        "fields":{
+            "PlaylistId": {
+                "type" : "dim"
+            },
+            "TrackId": {
+                "type" : "dim" 
+            }
+        },
+        "table" : "playlist_track"
+    }
+}
+
 def write_out(out):
     with open(
         os.getcwd() + "\\grizly\\grizly\\tests\\output.sql",
@@ -192,7 +220,6 @@ def test_orderby():
     assert clean_testexpr(sql) == clean_testexpr(testsql)
 
 
-
 def test_limit():
     q = QFrame().from_dict(deepcopy(orders))
     q.limit(10)
@@ -283,11 +310,29 @@ def test_to_sql():
     )
     engine = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
     q.assign(sales="Quantity*UnitPrice", type='num')
-    q.groupby(["TrackId"])[("Quantity")].agg("sum")
+    q.groupby(["TrackId"])["Quantity"].agg("sum")
     q.get_sql()
     df = q.to_sql(engine_string=engine)
-    
+    # write_out(str(df))
 
+
+def test_to_sql_2():
+    engine = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    q = QFrame()
+    q.sql = """SELECT * FROM artists"""
+    df = q.to_sql(engine_string=engine)
+    write_out(str(df))
+
+
+def test_join_1():
+    engine = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    playlists_qf = QFrame().from_dict(deepcopy(playlists))
+    playlist_track_qf = QFrame().from_dict(deepcopy(playlist_track))
+
+    joined_qf = join([playlist_track_qf,playlists_qf], join_type=["left join"], on=["sq1.PlaylistId=sq2.PlaylistId"])
+    joined_qf.get_sql()
+    df = joined_qf.to_sql(engine_string=engine)
+    # write_out(str(df))
 
 
 
