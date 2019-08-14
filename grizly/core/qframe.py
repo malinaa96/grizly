@@ -8,7 +8,6 @@ import json
 
 from grizly.io.sqlbuilder import (
     get_sql, 
-    to_sql, 
     build_column_strings
 )
 
@@ -35,11 +34,10 @@ class QFrame:
     """
     Parameters
     ----------
-    data: dictionary structure holding fields, schema, table, sql
-          information
+    data: dict
+        Dictionary structure holding fields, schema, table, sql information.
 
-    db : {'Denodo', 'Redshift', 'MariaDB'}, default 'Denodo'
-        Name of database.
+    engine : sqlalchemy.engine.Engine
 
     field : Each field is a dictionary with these keys. For instance, a 
             query field inside fields definition could look like 
@@ -58,15 +56,15 @@ class QFrame:
             column_name * 2 or 'string_value' etc.
     """
 
-    def __init__(self, data={}, sql="", db='Denodo', getfields=[]):
+    def __init__(self, data={}, sql="", engine=None, getfields=[]):
         self.data = data
         self.sql = sql
-        self.db = db
+        self.engine = engine
         self.getfields = getfields  # remove this and put in data
         self.fieldattrs = ["type","as","group_by","expression","select","custom_type"]
         self.fieldtypes = ["dim","num"]
         self.metaattrs = ["limit", "where"]
-        #self.save_json
+         
 
 
     def save_json(self, json_path=''):
@@ -78,13 +76,10 @@ class QFrame:
 
     def read_json(self, json_path=''):
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
-        try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-                self.validate_data(data)
-                self.data = data
-        except FileNotFoundError:
-            raise FielNotFoundError(f"File {json_path} not found")
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+            self.validate_data(data)
+            self.data = data
 
 
     def validate_data(self, data):
@@ -107,7 +102,6 @@ class QFrame:
     def from_dict(self, data):
         self.validate_data(data)
         self.data = data
-        ##self.save_json
         return self
 
        
@@ -121,13 +115,13 @@ class QFrame:
                 }}
 
         self.validate_data(data)
-        #self.save_json
-        return QFrame(data=data)
+        self.data = data
+        return self
 
 
     def create_sql_blocks(self):
-        #self.save_json
-        return build_column_strings(self)
+        self.data['select']['sql_blocks'] = build_column_strings(self.data)
+        return self
 
 
     def rename(self, fields):
@@ -147,7 +141,6 @@ class QFrame:
         for field in fields:
             if field in self.data["select"]["fields"]:
                 self.data["select"]["fields"][field]["as"] = fields[field]
-        #self.save_json
         return self
 
 
@@ -167,7 +160,7 @@ class QFrame:
         """
         for field in fields:
             self.data["select"]["fields"].pop(field, f"Field {field} not found.")
-        #self.save_json
+         
         return self
 
 
@@ -180,7 +173,7 @@ class QFrame:
             >>> q.distinct()
         """
         self.data["select"]["distinct"] = 1
-        #self.save_json
+         
         return self
 
 
@@ -209,7 +202,7 @@ class QFrame:
             print("You can't add where clause inside union. Use select() method first.")
         else:
             self.data["select"]["where"] = query
-        #self.save_json
+         
         return self
 
 
@@ -240,7 +233,7 @@ class QFrame:
                 for key in kwargs:
                     expression = kwargs[key]
                     self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by": group_by, "expression": expression}
-        #self.save_json
+         
         return self
 
 
@@ -269,7 +262,7 @@ class QFrame:
         for field in fields:
             self.data["select"]["fields"][field]["group_by"] = "group"
 
-        #self.save_json
+         
         return self
 
 
@@ -301,7 +294,7 @@ class QFrame:
                         print("Field not found.")
             else:
                 return print("Aggregation type must be sum, count, min, max or avg.")
-        #self.save_json
+         
         return self
 
 
@@ -361,7 +354,7 @@ class QFrame:
 
             iterator+=1
 
-        #self.save_json
+         
         return self
         
 
@@ -379,7 +372,7 @@ class QFrame:
         """
         self.data["select"]["limit"] = str(limit)
 
-        #self.save_json
+         
         return self
 
 
@@ -404,6 +397,7 @@ class QFrame:
 
             q -> fields : sq.customer_id, sq.order
         """
+        self.create_sql_blocks()
         sq_fields = copy.deepcopy(self.data["select"]["fields"])
         new_fields = {}
 
@@ -423,8 +417,7 @@ class QFrame:
         if new_fields: 
             data = {"select": {"fields": new_fields }, "sq": self.data}
             self.data = data
-
-        #self.save_json
+        
         return self
     
     
@@ -459,7 +452,7 @@ class QFrame:
 
 
 
-    def get_sql(self, subquery=False):
+    def get_sql(self):
         """
         Overwrites the sql statement inside the class. To get sql use your_class_name.sql
 
@@ -471,13 +464,15 @@ class QFrame:
             >>> sql = q.sql
             >>> print(sql)
         """
-        self.sql = get_sql(self).sql
+        self.create_sql_blocks()
+
+        self.sql = get_sql(self.data)
         return self
 
 
     def create_table(self, table, schema=''):
         """
-        Creates a new table in database if the table doesn't exist.
+        Creates a new QFrame table in database if the table doesn't exist.
 
         Parameters:
         ----------
@@ -486,13 +481,13 @@ class QFrame:
         schema : string, optional
             Specify the schema.
         """
-        create_table(self, table, schema)
+        create_table(qf=self, table=table, engine=self.engine, schema=schema)
         return self
 
 
     def to_csv(self, csv_path):
         """
-        Writes table to csv file.
+        Writes QFrame table to csv file.
 
         Parameters:
         ----------
@@ -502,7 +497,7 @@ class QFrame:
 
         self.get_sql()
 
-        to_csv(self,csv_path,self.sql,self.db)
+        to_csv(qf=self,csv_path=csv_path,sql=self.sql,engine=self.engine)
         return self
 
 
@@ -547,7 +542,7 @@ class QFrame:
         
     def to_rds(self, table, csv_path, s3_name, schema='', if_exists='fail', sep='\t'):
         """
-        Writes table to Redshift database.
+        Writes QFrame table to Redshift database.
 
         Parameters:
         ----------
@@ -560,20 +555,84 @@ class QFrame:
         schema : string, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
-                How to behave if the table already exists.
-                * fail: Raise a ValueError.
-                * replace: Clean table before inserting new values.
-                * append: Insert new values to the existing table.
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values.
+            * append: Insert new values to the existing table.
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
 
         self.get_sql()
             
-        to_csv(self,csv_path, self.sql, db=self.db, sep=sep)
+        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep)
         csv_to_s3(csv_path, s3_name)
         s3_to_rds(table, s3_name, qf=self, schema=schema, if_exists=if_exists, sep='\t')
 
+        return self
+
+
+    def to_df(self):
+        """
+        Writes QFrame to DataFrame. Uses pandas.read_sql. Returns DataFrame.
+
+        TODO: DataFarme types should correspond to types defined in QFrame data. 
+        """
+        self.get_sql()
+
+        df = pandas.read_sql(sql=self.sql, con=self.engine)
+        return df
+
+
+    def to_sql(self, table, engine, schema='', if_exists='fail', index=True, 
+                index_label=None, chunksize=None, dtype=None, method=None):
+        """
+        Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.read_sql.
+
+        Parameters:
+        ----------
+        table : string
+            Name of SQL table.
+        engine : sqlalchemy.engine.Engine
+
+        schema : string, optional
+            Specify the schema.
+        if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Drop the table before inserting new values.
+            * append: Insert new values to the existing table.
+        
+        index : bool, default True
+            Write DataFrame index as a column. Uses `index_label` as the column
+            name in the table.
+        index_label : string or sequence, default None
+            Column label for index column(s). If None is given (default) and
+            `index` is True, then the index names are used.
+            A sequence should be given if the DataFrame uses MultiIndex.
+        chunksize : int, optional
+            Rows will be written in batches of this size at a time. By default,
+            all rows will be written at once.
+        dtype : dict, optional
+            Specifying the datatype for columns. The keys should be the column
+            names and the values should be the SQLAlchemy types or strings for
+            the sqlite3 legacy mode.
+        method : {None, 'multi', callable}, default None
+            Controls the SQL insertion clause used:
+        
+            * None : Uses standard SQL ``INSERT`` clause (one per row).
+            * 'multi': Pass multiple values in a single ``INSERT`` clause.
+            * callable with signature ``(pd_table, conn, keys, data_iter)``.
+        """
+        df = self.to_df()
+        df.to_sql(self, name=table, con=engine, schema=schema, if_exists=if_exists, 
+        index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
+        return self
+
+
+    def __getitem__(self, getfields):
+        self.getfields = []
+        self.getfields.append(getfields)
         return self
 
     # old
@@ -593,21 +652,6 @@ class QFrame:
             )
         html_table += "</table>"
         display(HTML(html_table))
-
-
-    def to_sql(self, engine_string=""):  # put engine_string in fields as meta
-        sql = self.sql
-        if engine_string != "":
-            df = to_sql(sql, engine_string)
-        else:
-            df = to_sql(sql, self.data["engine_string"])
-        return df
-
-
-    def __getitem__(self, getfields):
-        self.getfields = []
-        self.getfields.append(getfields)
-        return self
 
     
 
@@ -637,6 +681,8 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
         are not repeated. If False the joined QFrame will contain all fields from every QFrame.
 
     NOTE: Order of the elements in join_type and on list is important.
+
+    TODO: Add validations on engines.
 
     Examples:
     --------
@@ -728,7 +774,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
     print("Data joined successfully.")
     if not unique_col:
         print("Please remove or rename duplicated columns. Use your_qframe.show_duplicated_columns() to check duplicates.")
-    return QFrame(data = data)
+    return QFrame(data=data, engine=qframes[0].engine)
 
 
 def union(qframes=[], union_type=[]):
@@ -736,6 +782,7 @@ def union(qframes=[], union_type=[]):
     Unions QFrame objects. Returns QFrame.
 
     TODO: Add validations on columns and an option to check unioned columns.
+    TODO: Add validations on engines.
 
     Parameters:
     ----------
@@ -771,6 +818,7 @@ def union(qframes=[], union_type=[]):
 
     iterator = 0
     for q in qframes:
+        q.create_sql_blocks()
         iterator += 1
         data[f"sq{iterator}"] = q.data 
                 
@@ -788,7 +836,7 @@ def union(qframes=[], union_type=[]):
     data["select"]["union"] = {"union_type": union_type}
 
     print("Data unioned successfully.")
-    return QFrame(data = data)
+    return QFrame(data=data, engine=qframes[0].engine)
 
 
 

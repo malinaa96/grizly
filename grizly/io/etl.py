@@ -2,16 +2,21 @@ import boto3
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+from sqlalchemy.engine import Engine
 import pandas as pd
 import csv
-from grizly.core.utils import read_config, check_if_exists
+
+from grizly.core.utils import (
+    read_config, 
+    check_if_exists
+)
 
 
 config = read_config()
 os.environ["HTTPS_PROXY"] = config["https"]
 
 
-def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
+def to_csv(qf,csv_path, sql, engine, sep='\t'):
     """
     Writes table to csv file.
 
@@ -21,19 +26,12 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
         Path to csv file.
     sql : string
         SQL query.
-    db : {'Denodo', 'Redshift', 'MariaDB'}, default 'Denodo'
-        Name of database.
+    engine : sqlalchemy.engine.Engine or sqlite3.Connection
+
     sep : string, default '\t'
         Separtor/delimiter in csv file.
     """
-    if db == 'Denodo':
-        engine = create_engine(config["denodo"])
-    elif db == 'Redshift':
-        engine = create_engine(config["redshift"], encoding='utf8',  poolclass=NullPool)
-    elif db == 'MariaDB':
-        engine = create_engine(config["mariadb"])
-    else:
-        raise ValueError("Invalid database.")
+    assert isinstance(engine, Engine), "Invalid engine"
         
     try:
         con = engine.connect().connection
@@ -53,7 +51,7 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
     con.close()
 
 
-def create_table(qf, table, schema=''):
+def create_table(qf, table, engine, schema=''):
     """
     Creates a new table in database if the table doesn't exist.
 
@@ -62,10 +60,12 @@ def create_table(qf, table, schema=''):
     qf : QFrame object
     table : string
         Name of SQL table.
+    engine : sqlalchemy.engine.Engine
+
     schema : string, optional
         Specify the schema.
     """
-    engine = create_engine(config["redshift"], encoding='utf8', poolclass=NullPool)
+    assert isinstance(engine, Engine), "Invalid engine."
 
     table_name = f'{schema}.{table}' if schema else f'{table}' 
 
@@ -131,7 +131,6 @@ def s3_to_csv(s3_name, csv_path):
 
 
 
-
 def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=False):
 
     """Copies a dataframe inside a Redshift schema.table
@@ -151,7 +150,7 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
     REGION = config['region']
 
     if engine is None:
-        engine = create_engine(config['redshift'], poolclass=NullPool)
+        engine = create_engine("mssql+pyodbc://Redshift", poolclass=NullPool)
 
     s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
     bucket = s3.Bucket('teis-data')
@@ -175,7 +174,7 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
         else:
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
     except:
-        engine = create_engine(config['redshift'])
+        engine = create_engine("mssql+pyodbc://Redshift")
         if dtype !="":
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
         else:
@@ -205,7 +204,7 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
     sep : string, default '\t'
         Separator/delimiter in csv file.
     """
-    engine = create_engine(config["redshift"],encoding='utf8', poolclass=NullPool)
+    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
     
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
@@ -220,7 +219,7 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
             pass
     else:
         if type(object) == QFrame:
-            create_table(qf, table, schema=schema)
+            create_table(qf, table, engine=engine, schema=schema)
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
 
