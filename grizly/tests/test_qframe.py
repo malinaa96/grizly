@@ -3,6 +3,7 @@ import sqlparse
 import os
 from copy import deepcopy
 from sqlalchemy import create_engine
+from pandas import read_sql, read_csv, merge
 
 from grizly.core.qframe import (
     QFrame, 
@@ -281,18 +282,38 @@ def test_to_df():
     )
     q.assign(sales="Quantity*UnitPrice", type='num')
     q.groupby(["TrackId"])["Quantity"].agg("sum")
-    df = q.to_df()
-    write_out(str(df))
+    df_from_qf = q.to_df()
+
+    test_df = read_sql(sql=q.sql, con=engine)
+    # write_out(str(test_df))
+    assert df_from_qf.equals(test_df)
 
 
-def test_to_df_2():
+
+def test_to_csv():
     engine = create_engine("sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db")
-    q = QFrame(engine=engine,data = {'select':{'fields':{'*':{'type':'dim'}}, 'table':'invoice_items'}})
-    df = q.to_df()
-    # write_out(str(df))
+    q = QFrame(engine=engine,data = {'select':{
+        'fields':{  'InvoiceLineId':{'type': 'dim'},
+                    'InvoiceId': {'type': 'dim'},
+                    'TrackId': {'type': 'dim'},
+                    'UnitPrice': {'type': 'num'},
+                    'Quantity': {'type': 'num'}
+                }, 
+        'table':'invoice_items'}})
+    q.assign(UnitPriceFlag='CASE WHEN UnitPrice>1 THEN 1 ELSE 0 END', type='dim')
+    q.rename({'TrackId': 'Track'})
+
+    csv_path = os.path.join(os.getcwd(), 'invoice_items_test.csv')
+    q.to_csv(csv_path)
+    df_from_qf = read_csv(csv_path, sep='\t')
+
+    test_df = read_sql(sql=q.sql, con=engine)
+    # write_out(str(test_df))
+    assert df_from_qf.equals(test_df)
 
 
-def test_join_1():
+
+def test_join_playlists():
     playlists = {
         "select": {
             "fields": {
@@ -316,14 +337,49 @@ def test_join_1():
 
     engine = create_engine("sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db")
 
-    playlists_qf = QFrame(engine=engine).from_dict(playlists)
-    playlist_track_qf = QFrame(engine=engine).from_dict(playlist_track)
-
+    playlist_track_qf = QFrame(engine=engine).from_dict(deepcopy(playlist_track))
+    playlists_qf = QFrame(engine=engine).from_dict(deepcopy(playlists))
 
     joined_qf = join([playlist_track_qf,playlists_qf], join_type=["left join"], on=["sq1.PlaylistId=sq2.PlaylistId"])
-    # write_out(str(joined_qf.data))
-    df = joined_qf.to_df()
-    write_out(str(df))
+    joined_df = joined_qf.to_df()
 
+    playlist_track_qf.get_sql()
+    pl_track_df = read_sql(sql=playlist_track_qf.sql, con=engine)
+
+    playlists_qf.get_sql()
+    pl_df = read_sql(sql=playlists_qf.sql, con=engine)
+
+    test_df = merge(pl_track_df, pl_df, how='left', on=['PlaylistId'])
+    # write_out(str(pl_track_df))
+    assert joined_df.equals(test_df)
+
+    tracks = {  'select': {
+                    'fields': {
+                        'TrackId': { 'type': 'dim'},
+                        'Name': {'type': 'dim'},
+                        'AlbumId': {'type': 'dim'},
+                        'MediaTypeId': {'type': 'dim'},
+                        'GenreId': {'type': 'dim'},
+                        'Composer': {'type': 'dim'},
+                        'Milliseconds': {'type': 'num'},
+                        'Bytes' : {'type': 'num'},
+                        'UnitPrice': {'type': 'num'}
+                    },
+                    'table': 'tracks'
+                }
+    }
+    tracks_qf = QFrame(engine=engine).from_dict(deepcopy(tracks))
+
+    joined_qf = join(qframes=[playlist_track_qf, playlists_qf, tracks_qf], join_type=
+                    ['left join', 'left join'], on=[
+                    'sq1.PlaylistId=sq2.PlaylistId', 'sq1.TrackId=sq3.TrackId'])
+    joined_df = joined_qf.to_df()
+
+    tracks_qf.get_sql()
+    tracks_df = read_sql(sql=tracks_qf.sql, con=engine)
+    
+    test_df = merge(test_df, tracks_df, how='left', on=['TrackId'])
+
+    write_out(str(test_df))
 
 

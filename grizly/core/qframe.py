@@ -3,7 +3,7 @@ import pandas
 import re
 import os
 import sqlparse
-import copy
+from copy import deepcopy
 import json
 
 from grizly.io.sqlbuilder import (
@@ -398,7 +398,7 @@ class QFrame:
             q -> fields : sq.customer_id, sq.order
         """
         self.create_sql_blocks()
-        sq_fields = copy.deepcopy(self.data["select"]["fields"])
+        sq_fields = deepcopy(self.data["select"]["fields"])
         new_fields = {}
 
         for field in fields:
@@ -435,7 +435,7 @@ class QFrame:
             else:
                 columns[alias] = [field]
 
-        duplicates = copy.deepcopy(columns)
+        duplicates = deepcopy(columns)
         for alias in columns.keys():
             if len(columns[alias]) == 1:
                 duplicates.pop(alias)
@@ -754,8 +754,8 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
     for q in qframes:
         q.create_sql_blocks()
         iterator += 1
-        data[f"sq{iterator}"] = q.data
-        sq = q.data['select']
+        data[f"sq{iterator}"] = deepcopy(q.data)
+        sq = deepcopy(q.data['select'])
             
         for alias in sq["sql_blocks"]["select_aliases"]:
             if unique_col and alias in aliases:
@@ -820,9 +820,9 @@ def union(qframes=[], union_type=[]):
     for q in qframes:
         q.create_sql_blocks()
         iterator += 1
-        data[f"sq{iterator}"] = q.data 
+        data[f"sq{iterator}"] = deepcopy(q.data) 
                 
-    fields = copy.deepcopy(data["sq1"]["select"]["fields"])
+    fields = deepcopy(data["sq1"]["select"]["fields"])
     
     for field in fields:
         if "select" in fields[field] and fields[field]["select"] == 0:
