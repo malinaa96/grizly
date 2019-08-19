@@ -5,6 +5,8 @@ import os
 import sqlparse
 from copy import deepcopy
 import json
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 from grizly.io.sqlbuilder import (
     get_sql, 
@@ -37,7 +39,8 @@ class QFrame:
     data: dict
         Dictionary structure holding fields, schema, table, sql information.
 
-    engine : sqlalchemy.engine.Engine
+    engine : str
+        Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC"
 
     field : Each field is a dictionary with these keys. For instance, a 
             query field inside fields definition could look like 
@@ -56,18 +59,26 @@ class QFrame:
             column_name * 2 or 'string_value' etc.
     """
 
-    def __init__(self, data={}, sql="", engine=None, getfields=[]):
+    def __init__(self, data={}, engine='', sql='', getfields=[]):
+        self.engine =  engine if engine!='' else "mssql+pyodbc://DenodoODBC"
         self.data = data
         self.sql = sql
-        self.engine = engine
-        self.getfields = getfields  # remove this and put in data
-        self.fieldattrs = ["type","as","group_by","expression","select","custom_type"]
-        self.fieldtypes = ["dim","num"]
+        self.getfields = getfields
+        self.fieldattrs = ["type", "as", "group_by", "expression", "select", "custom_type", "order_by"]
+        self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where"]
          
 
-
     def save_json(self, json_path=''):
+        """
+        Saves QFrame.data to json file. By default data is saved in your_directory\json\qframe_data.json'
+
+        Parameters:
+        ----------
+        json_path : str
+            Path to json file.
+
+        """ 
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
         with open(json_path, 'w') as f:
             json.dump(self.data, f)
@@ -75,6 +86,15 @@ class QFrame:
 
 
     def read_json(self, json_path=''):
+        """
+        Reads QFrame.data from json file. By default reads data from your_directory\json\qframe_data.json'
+
+        Parameters:
+        ----------
+        json_path : str
+            Path to json file.
+
+        """ 
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
         with open(json_path, 'r') as f:
             data = json.load(f)
@@ -158,6 +178,8 @@ class QFrame:
             >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
     
         """
+        if isinstance(fields, str) : fields = [fields]
+
         for field in fields:
             self.data["select"]["fields"].pop(field, f"Field {field} not found.")
          
@@ -257,8 +279,8 @@ class QFrame:
         """
         assert "union" not in self.data["select"], "You can't group by inside union. Use select() method first."
 
-        if isinstance(fields, str):
-            fields = [fields]
+        if isinstance(fields, str) : fields = [fields]
+
         for field in fields:
             self.data["select"]["fields"][field]["group_by"] = "group"
 
@@ -353,7 +375,6 @@ class QFrame:
                 print(f"Field {field} not found.")
 
             iterator+=1
-
          
         return self
         
@@ -371,7 +392,6 @@ class QFrame:
                 >>> q.limit(100)          
         """
         self.data["select"]["limit"] = str(limit)
-
          
         return self
 
@@ -400,6 +420,8 @@ class QFrame:
         self.create_sql_blocks()
         sq_fields = deepcopy(self.data["select"]["fields"])
         new_fields = {}
+
+        if isinstance(fields, str) : fields = [fields]
 
         for field in fields:
             if field not in sq_fields:
@@ -454,7 +476,7 @@ class QFrame:
 
     def get_sql(self):
         """
-        Overwrites the sql statement inside the class. To get sql use your_class_name.sql
+        Overwrites the sql statement inside the class.
 
         Examples:
         --------
@@ -470,18 +492,20 @@ class QFrame:
         return self
 
 
-    def create_table(self, table, schema=''):
+    def create_table(self, table, engine, schema=''):
         """
-        Creates a new QFrame table in database if the table doesn't exist.
+        Creates a new empty QFrame table in database if the table doesn't exist.
 
         Parameters:
         ----------
         table : string
             Name of SQL table.
+        engine : string
+            Engine string (where we want to create table).
         schema : string, optional
             Specify the schema.
         """
-        create_table(qf=self, table=table, engine=self.engine, schema=schema)
+        create_table(qf=self, table=table, engine=engine, schema=schema)
         return self
 
 
@@ -580,7 +604,8 @@ class QFrame:
         """
         self.get_sql()
 
-        df = pandas.read_sql(sql=self.sql, con=self.engine)
+        con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
+        df = pandas.read_sql(sql=self.sql, con=con)
         return df
 
 
@@ -593,8 +618,8 @@ class QFrame:
         ----------
         table : string
             Name of SQL table.
-        engine : sqlalchemy.engine.Engine
-
+        engine : str
+            Engine string.
         schema : string, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -625,7 +650,9 @@ class QFrame:
             * callable with signature ``(pd_table, conn, keys, data_iter)``.
         """
         df = self.to_df()
-        df.to_sql(self, name=table, con=engine, schema=schema, if_exists=if_exists, 
+        con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
+
+        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists, 
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
@@ -655,7 +682,7 @@ class QFrame:
 
     
 
-def join(qframes=[], join_type=[], on=[], unique_col=True):
+def join(qframes=[], join_type=None, on=None, unique_col=True):
     """
     Joins QFrame objects. Returns QFrame. 
 
@@ -670,9 +697,9 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
     ----------
     qframes : list
         List of qframes
-    join_type : list
-        List of join types.
-    on : list
+    join_type : str or list
+        Join type or a list of join types.
+    on : str or list
         List of on join conditions. In case of CROSS JOIN set the condition on 0. 
         NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}." 
         if you want to refer to the column. Check examples. 
@@ -682,7 +709,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
 
     NOTE: Order of the elements in join_type and on list is important.
 
-    TODO: Add validations on engines.
+    TODO: Add validations on engines. QFarmes engines have to be the same.
 
     Examples:
     --------
@@ -690,7 +717,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
         q1 -> fields: customer_id, orders
         q2 -> fields: customer_id, orders as 'ord'
 
-        >>> q_joined = join(qframes=[q1,q2], join_type=["LEFT JOIN"], on=["sq1.customer_id=sq2.customer_id"])
+        >>> q_joined = join(qframes=[q1,q2], join_type="LEFT JOIN", on="sq1.customer_id=sq2.customer_id")
 
         q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
                             sq2.ord as 'ord'
@@ -712,7 +739,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
         q2 -> fields: customer_id, orders as 'ord'
         q3 -> fields: id, orders, date
 
-        >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", INNER JOIN"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
+        >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", "inner join"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
 
         q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
                             sq2.customer_id as 'customer_id', sq2.ord as 'ord',
@@ -745,7 +772,8 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
                 (q3.sql) sq3 ON sq2.customer_id=sq3.id
 
     """
-    assert len(qframes) == len(join_type)+1 and len(join_type) == len(on), "Incorrect list size."
+    assert len(qframes) == len(join_type)+1 or len(qframes)==2 and isinstance(join_type,str), "Incorrect list size."
+    assert len(qframes)==2 and isinstance(on,(int,str)) or len(join_type) == len(on) , "Incorrect list size."
 
     data = {'select': {'fields': {} }}
     aliases = []
@@ -768,7 +796,10 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
                         if "custom_type" in sq["fields"][field]:
                             data["select"]["fields"][f"sq{iterator}.{alias}"]["custom_type"] = sq["fields"][field]["custom_type"]
                         break
-                    
+
+    if isinstance(join_type, str) : join_type = [join_type]
+    if isinstance(on, (int,str)) : on = [on]
+
     data["select"]["join"] = { "join_type": join_type, "on": on}
 
     print("Data joined successfully.")
@@ -777,7 +808,7 @@ def join(qframes=[], join_type=[], on=[], unique_col=True):
     return QFrame(data=data, engine=qframes[0].engine)
 
 
-def union(qframes=[], union_type=[]):
+def union(qframes=[], union_type=None):
     """
     Unions QFrame objects. Returns QFrame.
 
@@ -788,8 +819,8 @@ def union(qframes=[], union_type=[]):
     ----------
     qframes : list
         List of qframes
-    union_type : list
-        List of union types. Valid types: 'UNION', 'UNION ALL'.
+    union_type : str or list
+        Type or list of union types. Valid types: 'UNION', 'UNION ALL'.
 
     Examples:
     --------
@@ -812,6 +843,8 @@ def union(qframes=[], union_type=[]):
             q3.sql
 
     """
+    if isinstance(union_type, str) : union_type = [union_type]
+
     assert len(qframes) == len(union_type)+1, "Incorrect list size."
     assert set(item.upper() for item in union_type) <= {"UNION", "UNION ALL"}, "Incorrect union type. Valid types: 'UNION', 'UNION ALL'."
     data = {'select': {'fields': {}}}
