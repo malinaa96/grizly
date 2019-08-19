@@ -2,7 +2,6 @@ import boto3
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
-from sqlalchemy.engine import Engine
 import pandas as pd
 import csv
 
@@ -26,12 +25,12 @@ def to_csv(qf,csv_path, sql, engine, sep='\t'):
         Path to csv file.
     sql : string
         SQL query.
-    engine : sqlalchemy.engine.Engine or sqlite3.Connection
-
+    engine : str
+        Engine string.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
     """
-    assert isinstance(engine, Engine), "Invalid engine"
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
         
     try:
         con = engine.connect().connection
@@ -60,12 +59,12 @@ def create_table(qf, table, engine, schema=''):
     qf : QFrame object
     table : string
         Name of SQL table.
-    engine : sqlalchemy.engine.Engine
-
+    engine : str
+        Engine string.
     schema : string, optional
         Specify the schema.
     """
-    assert isinstance(engine, Engine), "Invalid engine."
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}' 
 
@@ -218,8 +217,8 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
         else:
             pass
     else:
-        if type(object) == QFrame:
-            create_table(qf, table, engine=engine, schema=schema)
+        if type(qf) == QFrame:
+            create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
 

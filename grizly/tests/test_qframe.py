@@ -3,7 +3,7 @@ import sqlparse
 import os
 from copy import deepcopy
 from sqlalchemy import create_engine
-from pandas import read_sql, read_csv, merge
+from pandas import read_sql, read_csv, merge, concat
 
 from grizly.core.qframe import (
     QFrame, 
@@ -15,6 +15,7 @@ from grizly.io.sqlbuilder import (
     build_column_strings, 
     get_sql
 )
+
 
 orders = {
     "select": {
@@ -71,6 +72,13 @@ def clean_testexpr(testsql):
     testsql = testsql.lower()
     return testsql
 
+def test_save_json_and_read_json():
+    q = QFrame().from_dict(deepcopy(customers))
+    q.save_json()
+    q.read_json()
+    os.remove(os.path.join(os.getcwd(), 'json', 'qframe_data.json'))
+    assert q.data == customers
+
 
 def test_validation_data():
     QFrame().validate_data(deepcopy(orders))
@@ -86,7 +94,7 @@ def test_from_dict():
 
 def test_read_excel():
     excel_path = os.path.join(os.getcwd(), 'grizly', 'grizly', 'tests', 'tables.xlsx')
-    q = QFrame().read_excel(excel_path,sheet_name="orders",)
+    q = QFrame().read_excel(excel_path,sheet_name="orders")
     assert q.data["select"]["fields"]["Order_Nr"] == {
         "type": "dim",
         "group_by": "group",
@@ -274,25 +282,9 @@ def test_get_sql_with_select_attr():
 
 
 
-def test_to_df():
-    engine = create_engine("sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db")
-    q = QFrame(engine=engine).read_excel(
-        os.getcwd() + "\\grizly\\grizly\\tests\\tables.xlsx",
-        sheet_name="cb_invoices",
-    )
-    q.assign(sales="Quantity*UnitPrice", type='num')
-    q.groupby(["TrackId"])["Quantity"].agg("sum")
-    df_from_qf = q.to_df()
-
-    test_df = read_sql(sql=q.sql, con=engine)
-    # write_out(str(test_df))
-    assert df_from_qf.equals(test_df)
-
-
-
 def test_to_csv():
-    engine = create_engine("sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db")
-    q = QFrame(engine=engine,data = {'select':{
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    q = QFrame(engine=engine_string,data = {'select':{
         'fields':{  'InvoiceLineId':{'type': 'dim'},
                     'InvoiceId': {'type': 'dim'},
                     'TrackId': {'type': 'dim'},
@@ -307,41 +299,83 @@ def test_to_csv():
     q.to_csv(csv_path)
     df_from_qf = read_csv(csv_path, sep='\t')
 
+    os.remove(csv_path)
+
+    engine = create_engine(engine_string)
     test_df = read_sql(sql=q.sql, con=engine)
     # write_out(str(test_df))
     assert df_from_qf.equals(test_df)
 
 
 
-def test_join_playlists():
-    playlists = {
-        "select": {
-            "fields": {
-                "PlaylistId": {"type" : "dim"},
-                "Name": {"type" : "dim"}
-            },
-            "table" : "playlists"
-        }
+def test_to_df():
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+    q = QFrame(engine=engine_string).read_excel(
+        os.getcwd() + "\\grizly\\grizly\\tests\\tables.xlsx",
+        sheet_name="cb_invoices",
+    )
+    q.assign(sales="Quantity*UnitPrice", type='num')
+    q.groupby(["TrackId"])["Quantity"].agg("sum")
+    df_from_qf = q.to_df()
+
+    engine = create_engine(engine_string)
+    test_df = read_sql(sql=q.sql, con=engine)
+    # write_out(str(test_df))
+    assert df_from_qf.equals(test_df)
+
+
+
+playlists = {
+    "select": {
+        "fields": {
+            "PlaylistId": {"type" : "dim"},
+            "Name": {"type" : "dim"}
+        },
+        "table" : "playlists"
     }
+}
 
 
-    playlist_track = {
-        "select": {
-            "fields":{
-                "PlaylistId": {"type" : "dim"},
-                "TrackId": {"type" : "dim"}
-            },
-            "table" : "playlist_track"
-        }
+playlist_track = {
+    "select": {
+        "fields":{
+            "PlaylistId": {"type" : "dim"},
+            "TrackId": {"type" : "dim"}
+        },
+        "table" : "playlist_track"
     }
+}
 
-    engine = create_engine("sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db")
 
-    playlist_track_qf = QFrame(engine=engine).from_dict(deepcopy(playlist_track))
-    playlists_qf = QFrame(engine=engine).from_dict(deepcopy(playlists))
+tracks = {  'select': {
+                'fields': {
+                    'TrackId': { 'type': 'dim'},
+                    'Name': {'type': 'dim'},
+                    'AlbumId': {'type': 'dim'},
+                    'MediaTypeId': {'type': 'dim'},
+                    'GenreId': {'type': 'dim'},
+                    'Composer': {'type': 'dim'},
+                    'Milliseconds': {'type': 'num'},
+                    'Bytes' : {'type': 'num'},
+                    'UnitPrice': {'type': 'num'}
+                },
+                'table': 'tracks'
+            }
+}
 
-    joined_qf = join([playlist_track_qf,playlists_qf], join_type=["left join"], on=["sq1.PlaylistId=sq2.PlaylistId"])
+
+def test_join_1():
+    # using grizly
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+
+    playlist_track_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlist_track))
+    playlists_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlists))
+
+    joined_qf = join([playlist_track_qf,playlists_qf], join_type="left join", on="sq1.PlaylistId=sq2.PlaylistId")
     joined_df = joined_qf.to_df()
+
+    # using pandas
+    engine = create_engine(engine_string)
 
     playlist_track_qf.get_sql()
     pl_track_df = read_sql(sql=playlist_track_qf.sql, con=engine)
@@ -350,36 +384,130 @@ def test_join_playlists():
     pl_df = read_sql(sql=playlists_qf.sql, con=engine)
 
     test_df = merge(pl_track_df, pl_df, how='left', on=['PlaylistId'])
-    # write_out(str(pl_track_df))
+
     assert joined_df.equals(test_df)
 
-    tracks = {  'select': {
-                    'fields': {
-                        'TrackId': { 'type': 'dim'},
-                        'Name': {'type': 'dim'},
-                        'AlbumId': {'type': 'dim'},
-                        'MediaTypeId': {'type': 'dim'},
-                        'GenreId': {'type': 'dim'},
-                        'Composer': {'type': 'dim'},
-                        'Milliseconds': {'type': 'num'},
-                        'Bytes' : {'type': 'num'},
-                        'UnitPrice': {'type': 'num'}
-                    },
-                    'table': 'tracks'
-                }
-    }
-    tracks_qf = QFrame(engine=engine).from_dict(deepcopy(tracks))
+    # using grizly
+    tracks_qf = QFrame(engine=engine_string).from_dict(deepcopy(tracks))
 
     joined_qf = join(qframes=[playlist_track_qf, playlists_qf, tracks_qf], join_type=
                     ['left join', 'left join'], on=[
-                    'sq1.PlaylistId=sq2.PlaylistId', 'sq1.TrackId=sq3.TrackId'])
+                    'sq1.PlaylistId=sq2.PlaylistId', 'sq1.TrackId=sq3.TrackId'], unique_col=False)
+
+    joined_qf.remove(['sq2.PlaylistId', 'sq3.TrackId'])
+    joined_qf.rename({'sq2.Name': 'Name_x', 'sq3.Name': 'Name_y'})
     joined_df = joined_qf.to_df()
 
+    # using pandas
     tracks_qf.get_sql()
     tracks_df = read_sql(sql=tracks_qf.sql, con=engine)
     
     test_df = merge(test_df, tracks_df, how='left', on=['TrackId'])
 
-    write_out(str(test_df))
+    assert joined_df.equals(test_df)
+
+
+def test_join_2():
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+
+    playlist_track_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlist_track))
+    playlists_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlists))
+
+    joined_qf = join([playlist_track_qf,playlists_qf], join_type="cross join", on=0)
+
+    sql = joined_qf.get_sql().sql
+
+    testsql = """
+            SELECT sq1.PlaylistId AS PlaylistId,
+                sq1.TrackId AS TrackId,
+                sq2.Name AS Name
+            FROM
+            (SELECT PlaylistId,
+                    TrackId
+            FROM playlist_track) sq1
+            CROSS JOIN
+            (SELECT PlaylistId,
+                    Name
+            FROM playlists) sq2
+            """
+
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+
+    joined_qf = join([joined_qf, playlist_track_qf,playlists_qf], join_type=["RIGHT JOIN","full join"], on=['sq1.PlaylistId=sq2.PlaylistId', 'sq2.PlaylistId=sq3.PlaylistId'])
+
+    sql = joined_qf.get_sql().sql
+
+    testsql = """
+                SELECT sq1.PlaylistId AS PlaylistId,
+                    sq1.TrackId AS TrackId,
+                    sq1.Name AS Name
+                FROM
+                (SELECT sq1.PlaylistId AS PlaylistId,
+                        sq1.TrackId AS TrackId,
+                        sq2.Name AS Name
+                FROM
+                    (SELECT PlaylistId,
+                            TrackId
+                    FROM playlist_track) sq1
+                CROSS JOIN
+                    (SELECT PlaylistId,
+                            Name
+                    FROM playlists) sq2) sq1
+                RIGHT JOIN
+                (SELECT PlaylistId,
+                        TrackId
+                FROM playlist_track) sq2 ON sq1.PlaylistId=sq2.PlaylistId
+                FULL JOIN
+                (SELECT PlaylistId,
+                        Name
+                FROM playlists) sq3 ON sq2.PlaylistId=sq3.PlaylistId
+            """
+
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+
+
+def test_union():
+    engine_string = "sqlite:///" + os.getcwd() + "\\grizly\\grizly\\tests\\chinook.db"
+
+    playlists_qf = QFrame(engine=engine_string).from_dict(deepcopy(playlists))
+
+    unioned_qf =  union([playlists_qf, playlists_qf], 'union')
+
+    testsql = """
+            SELECT PlaylistId,
+                Name
+            FROM playlists
+            UNION
+            SELECT PlaylistId,
+                Name
+            FROM playlists
+            """
+    sql = unioned_qf.get_sql().sql
+
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+    assert unioned_qf.to_df().equals(playlists_qf.to_df())
+
+    unioned_qf =  union([playlists_qf, playlists_qf], 'union all')
+
+    testsql = """
+            SELECT PlaylistId,
+                Name
+            FROM playlists
+            UNION ALL
+            SELECT PlaylistId,
+                Name
+            FROM playlists
+            """
+    sql = unioned_qf.get_sql().sql
+
+    assert clean_testexpr(sql) == clean_testexpr(testsql)
+    assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
+
+
+
+    
+
+
+
 
 

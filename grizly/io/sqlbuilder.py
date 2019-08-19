@@ -1,6 +1,4 @@
 import sqlparse
-import pandas
-from sqlalchemy import create_engine
 from copy import deepcopy
 
 
@@ -84,11 +82,10 @@ def get_sql(data):
 
     if "union" in data["select"]:
         iterator = 1 
-
         sq_data = deepcopy(data[f'sq{iterator}'])
         sql += get_sql(sq_data)
 
-        for union in data["union"]["union_type"]:
+        for union in data["select"]["union"]["union_type"]:
             union_type = data["select"]["union"]["union_type"][iterator-1]
             sq_data = deepcopy(data[f'sq{iterator+1}'])
             right_table = get_sql(sq_data)
@@ -124,7 +121,7 @@ def get_sql(data):
                 on = data["select"]["join"]["on"][iterator-1]
 
                 sql += f" {join_type} ({right_table}) sq{iterator+1}"
-                if on != 0:
+                if not on in {0, '0'}:
                     sql += f" ON {on}"
                 iterator += 1
 
