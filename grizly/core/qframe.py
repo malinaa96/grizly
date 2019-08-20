@@ -199,33 +199,43 @@ class QFrame:
         return self
 
 
-    def query(self, query):
+
+    def query(self, query, if_exists='append',operator='and' ):
         """
+        Query
+        -----
         Creates a "where" attribute inside the data dictionary.
-
-        Parameters:
-        ----------
-        query : str
-            WHERE statement.
-
-        Examples:
-        --------
-        orders -> dict with order table fields
-
+        Prepends the table name to each column field. So
+        Country = 'Italy' becomes Orders.Country = 'Italy'
+        >>> orders = dict with order table fields
         >>> q = QFrame().from_dict(orders)
         >>> expr = q.query(
                             "country!='Italy' 
                                 and (Customer='Enel' or Customer='Agip')
                                 or Value>1000
                             ")
-
+        >>> assert expr.data["where"] == "
+                                    Orders.country!='Italy' 
+                                    and (Orders.Customer='Enel' or Orders.Customer='Agip')
+                                    or Orders.Value>1000
+                                    "
+        Parameters
+        -----
+        query : string
+        if_exists :  {'append', 'replace'}
+            How to behave when the where clause already exists.
+        operator : {'and', 'or'}
+            How to add another condition to existing one.
         """
         if "union" in self.data["select"]:
             print("You can't add where clause inside union. Use select() method first.")
         else:
-            self.data["select"]["where"] = query
-         
+            if 'where' not in self.data['select'] or if_exists=='replace':
+                self.data["select"]["where"] = query
+            elif if_exists=='append':
+                self.data["select"]["where"] += f" {operator} {query}"		
         return self
+
 
 
     def assign(self, type="dim", group_by="", **kwargs):

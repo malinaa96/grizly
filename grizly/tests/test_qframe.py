@@ -130,17 +130,13 @@ def test_distinct():
     
 def test_query():
     q = QFrame().from_dict(deepcopy(orders))
-    expr = q.query(
-        """country!='Italy' 
-                and (Customer='Enel' or Customer='Agip')
-                or Value>1000
-            """
+    q.query("country!='France'")
+    q.query("country!='Italy'",if_exists='replace')
+    q.query("(Customer='Enel' or Customer='Agip')")
+    q.query("Value>1000",operator='or'          
     )
-    testexpr = """country!='Italy' 
-                and (Customer='Enel' or Customer='Agip')
-                or Value>1000
-            """
-    assert expr.data["select"]["where"] == testexpr
+    testexpr = "country!='Italy' and (Customer='Enel' or Customer='Agip') or Value>1000"
+    assert q.data["select"]["where"] == testexpr
 
 
 def test_assign():
