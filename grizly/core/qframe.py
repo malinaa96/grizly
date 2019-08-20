@@ -550,7 +550,7 @@ class QFrame:
         return self
 
 
-    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t'):
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
         """
         Writes s3 to Redshift database.
 
@@ -570,11 +570,11 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        s3_to_rds(table, s3_name, qf=self, schema=schema , if_exists=if_exists, sep=sep)
+        s3_to_rds(table, s3_name, qf=self, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
         
-    def to_rds(self, table, csv_path, s3_name, schema='', if_exists='fail', sep='\t'):
+    def to_rds(self, table, csv_path, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
         """
         Writes QFrame table to Redshift database.
 
@@ -601,7 +601,7 @@ class QFrame:
             
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep)
         csv_to_s3(csv_path, s3_name)
-        s3_to_rds(table, s3_name, qf=self, schema=schema, if_exists=if_exists, sep='\t')
+        s3_to_rds(table, s3_name, qf=self, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
         return self
 
