@@ -180,8 +180,7 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
 
 
-
-def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t', use_col_names=True):
+def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
     """
     Writes s3 to Redshift database.
 
@@ -219,15 +218,11 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t', us
         else:
             pass
     else:
-        if type(qf) == QFrame:
-            create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
+        create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
     
-    if qf is not None and use_col_names:
-        col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')'
-    else:
-        col_names = ''
+    col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
 
     print("Loading {} data into {} ...".format(s3_name,table_name))
 
@@ -241,6 +236,59 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t', us
         REMOVEQUOTES
         ;commit;
         """.format(table_name, col_names, s3_name, config["akey"], config["skey"], sep)
+
+    engine.execute(sql)
+    print('Data has been copied to {}'.format(table_name))
+
+
+def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
+    """
+    Writes s3 to Redshift database.
+
+    Parameters:
+    -----------
+    table : string
+        Name of SQL table.
+    s3_name : string
+        Name of s3. 
+    schema : string, optional
+        Specify the schema.
+    if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values. NOTE: It won't drop the table.
+            * append: Insert new values to the existing table.
+    sep : string, default '\t'
+        Separator/delimiter in csv file.
+    """
+    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+    
+    table_name = f'{schema}.{table}' if schema else f'{table}'
+
+    if check_if_exists(table, schema):
+        if if_exists == 'fail':
+            raise ValueError("Table {} already exists".format(table_name))
+        elif if_exists == 'replace':
+            sql ="DELETE FROM {}".format(table_name)
+            engine.execute(sql)
+            print('SQL table has been cleaned up successfully.')
+        else:
+            pass
+
+    if s3_name[-4:] != '.csv': s3_name += '.csv'
+
+    print("Loading {} data into {} ...".format(s3_name,table_name))
+
+    sql = """
+        COPY {} FROM 's3://teis-data/bulk/{}' 
+        access_key_id '{}' 
+        secret_access_key '{}'
+        delimiter '{}'
+        NULL ''
+        IGNOREHEADER 1
+        REMOVEQUOTES
+        ;commit;
+        """.format(table_name, s3_name, config["akey"], config["skey"], sep)
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))

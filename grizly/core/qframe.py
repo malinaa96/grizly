@@ -597,7 +597,7 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        s3_to_rds(table, s3_name, qf=self, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        s3_to_rds_qf(self, table, s3_name, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
         
