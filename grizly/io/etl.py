@@ -181,7 +181,7 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
 
 
 
-def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
+def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t', use_col_names=True):
     """
     Writes s3 to Redshift database.
 
@@ -202,6 +202,8 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
             * append: Insert new values to the existing table.
     sep : string, default '\t'
         Separator/delimiter in csv file.
+    use_col_names : boolean, default True
+        If True the data will be loaded by the names of columns.
     """
     engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
     
@@ -221,11 +223,16 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
             create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
+    
+    if qf is not None and use_col_names:
+        col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')'
+    else:
+        col_names = ''
 
     print("Loading {} data into {} ...".format(s3_name,table_name))
 
     sql = """
-        COPY {} FROM 's3://teis-data/bulk/{}' 
+        COPY {} {} FROM 's3://teis-data/bulk/{}' 
         access_key_id '{}' 
         secret_access_key '{}'
         delimiter '{}'
@@ -233,7 +240,7 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
-        """.format(table_name, s3_name, config["akey"], config["skey"], sep)
+        """.format(table_name, col_names, s3_name, config["akey"], config["skey"], sep)
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
