@@ -138,6 +138,13 @@ def test_query():
     testexpr = "country!='Italy' and (Customer='Enel' or Customer='Agip') or Value>1000"
     assert q.data["select"]["where"] == testexpr
 
+def test_having():
+    q = QFrame().from_dict(deepcopy(orders))
+    q.query("sum(Value)==1000")
+    q.query("sum(Value)>1000",if_exists='replace')
+    q.query("count(Customer)<=65")        
+    testexpr = "sum(Value)>1000 and count(Customer)<=65"
+    assert q.data["select"]["where"] == testexpr
 
 def test_assign():
     q = QFrame().from_dict(deepcopy(orders))

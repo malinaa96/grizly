@@ -66,7 +66,7 @@ class QFrame:
         self.getfields = getfields
         self.fieldattrs = ["type", "as", "group_by", "expression", "select", "custom_type", "order_by"]
         self.fieldtypes = ["dim", "num"]
-        self.metaattrs = ["limit", "where"]
+        self.metaattrs = ["limit", "where", "having"]
          
 
     def save_json(self, json_path=''):
@@ -236,7 +236,34 @@ class QFrame:
                 self.data["select"]["where"] += f" {operator} {query}"		
         return self
 
-
+    def having(self, having, if_exists='append', operator='and' ):
+        """
+        HAVING
+        -----
+        Creates a "having" attribute inside the data dictionary.
+        Prepends the table name to each column field. 
+        So Country = 'Italy' becomes Orders.Country = 'Italy'
+        >>> orders = dict with order table fields
+        >>> q = QFrame().from_dict(orders)
+        >>> expr = q.having("sum(Value)>1000 and count(Customer)<=65")
+        >>> assert expr.data["having"] == "sum(Value)>1000) and count(Customer)<=65"
+        Parameters
+        -----
+        having : string
+        if_exists :  {'append', 'replace'}
+            How to behave when the having clause already exists.
+        operator : {'and', 'or'}
+            How to add another condition to existing one.
+        """
+        if "union" in self.data["select"]:
+            print("""You can't add having clause inside union. Use select() method first. 
+            (The GROUP BY and HAVING clauses are applied to each individual query, not the final result set.)""")
+        else:
+            if 'having' not in self.data['select'] or if_exists=='replace':
+                self.data["select"]["having"] = having
+            elif if_exists=='append':
+                self.data["select"]["having"] += f" {operator} {having}"		
+        return self
 
     def assign(self, type="dim", group_by="", **kwargs):
         """
@@ -686,6 +713,7 @@ class QFrame:
                 self.fields[field]["type"],
                 self.fields[field]["group_by"],
                 self.fields[field]["where"],
+                self.fields[field]["having"],
             )
         html_table += "</table>"
         display(HTML(html_table))

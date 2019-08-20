@@ -137,6 +137,9 @@ def get_sql(data):
             group_names = ', '.join(data["select"]['sql_blocks']['group_dimensions'])
             sql += f" GROUP BY {group_names}"
 
+        if "having" in data["select"]:
+            sql += " HAVING {}".format(data["select"]["having"])
+
     if data["select"]["sql_blocks"]["order_by"] != []:
         order_by = ', '.join(data["select"]["sql_blocks"]["order_by"])
         sql += f" ORDER BY {order_by}"
