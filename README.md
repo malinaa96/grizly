@@ -34,10 +34,3 @@ sales_table.FY18_Sales - sales_table.FY19_Sales
 ### But why?
 Currently Pandas does not support building interactive SQL queries with its api. Pandas is a great library with a great api so why not use the same api to generate SQL statements? This would make the data ecosystem more consistent for analysts and reduce their cognitive load when moving from databases to dataframes. And so here we are.
 
-### Future
-
-Of course any contribution is welcome, but right now it is all very experimental. Ideally in the future we:
-
-* add more sql capabilities (expressions, joins, etc.)
-* add support for various databases (now it's only tested on redshift)
-* add some visualizations with Altair
