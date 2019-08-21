@@ -292,3 +292,33 @@ def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
+
+def write_to(qf, table, schema):
+    """
+    Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+
+    Warning: QFrame object should not have Denodo defined as an engine.
+
+    Parameters:
+    -----
+    qf: QFrame object
+    table: string
+    schema: string
+    """  
+    sql = qf.get_sql().sql
+    columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
+    if schema!='':
+        sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
+    else:
+        sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
+    engine = create_engine(qf.engine)
+    engine.execute(sql_statement)
+    print(f'Data has been written to {table}')
+
+
+
+
+
+
+
+

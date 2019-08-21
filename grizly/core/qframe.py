@@ -597,7 +597,7 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        s3_to_rds_qf(self, table, s3_name, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        s3_to_rds_qf(self, table, s3_name,  schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
         
@@ -628,8 +628,21 @@ class QFrame:
             
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep)
         csv_to_s3(csv_path, s3_name)
-        s3_to_rds(table, s3_name, qf=self, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        s3_to_rds_qf(self, table, s3_name, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
+        return self
+
+    def write_to(self, table, schema=''):
+        """
+        Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+
+        Parameters:
+        -----
+        qf: QFrame object
+        table: string
+        schema: string
+        """  
+        write_to(qf=self,table=table,schema=schema)
         return self
 
 
@@ -908,7 +921,6 @@ def union(qframes=[], union_type=None):
 
     print("Data unioned successfully.")
     return QFrame(data=data, engine=qframes[0].engine)
-
 
 
 

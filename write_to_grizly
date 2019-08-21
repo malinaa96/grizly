@@ -1,0 +1,26 @@
+def write_to(qf, table, schema, write_option='insert'):
+    """
+    Name of columns have to match each other
+    Parameters:
+    qf: QFrame object
+    table:
+    schema:
+    fill_option: {'insert','update'}
+    """  
+    sql = qf.get_sql().sql
+    columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
+    if write_option == 'insert':
+        sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
+    elif write_option == 'update':
+        statement = f"UPDATE {schema}.{table} SET "
+        for i in range(len(qf.data['select']['fields'])):
+            if 'sq' is qf.data:
+                column = qf.data['sq']['select']['sql_blocks']['select_aliases'][i]
+                statement += f"table_1.{column}=table2.{column}, "
+            else:
+                column = qf.data['select']['sql_blocks']['select_aliases'][i]
+                statement += f"table_1.{column}=table2.{column}, "
+        sql_statement = statement[:-2]
+        sql_statement += f" FROM {schema}.{table} AS table_1 JOIN ({sql}) AS table_2"
+    engine = create_engine(qf.engine)
+    engine.execute(sql_statement)
