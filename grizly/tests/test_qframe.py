@@ -327,6 +327,16 @@ def test_to_df():
     assert df_from_qf.equals(test_df)
 
 
+def test_copy():
+    excel_path = os.path.join(os.getcwd(), 'grizly', 'grizly', 'tests', 'tables.xlsx')
+    qf = QFrame().read_excel(excel_path, sheet_name="orders")
+
+    qf_copy = qf.copy()
+    assert qf_copy.data == qf.data and qf_copy.sql == qf.sql and qf_copy.engine == qf.engine
+
+    qf_copy.remove('Part').get_sql()
+    assert qf_copy.data != qf.data and qf_copy.sql != qf.sql and qf_copy.engine == qf.engine
+
 
 playlists = {
     "select": {

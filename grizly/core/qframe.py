@@ -628,7 +628,9 @@ class QFrame:
             
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep)
         csv_to_s3(csv_path, s3_name)
+
         s3_to_rds_qf(self, table, s3_name, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+
 
         return self
 
@@ -705,6 +707,16 @@ class QFrame:
         df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists, 
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
+
+    def copy(self):
+        """
+        Copies QFrame. 
+        """
+        data = deepcopy(self.data)
+        engine = deepcopy(self.engine)
+        sql = deepcopy(self.sql)
+        getfields = deepcopy(self.getfields)
+        return QFrame(data=data, engine=engine, sql=sql, getfields=getfields)
 
 
     def __getitem__(self, getfields):
