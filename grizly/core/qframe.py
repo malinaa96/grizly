@@ -104,8 +104,7 @@ class QFrame:
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
         with open(json_path, 'r') as f:
             data = json.load(f)
-            self.validate_data(data)
-            self.data = data
+            self.data = self.validate_data(data)
 
 
     def validate_data(self, data):
@@ -146,8 +145,7 @@ class QFrame:
                     "table": table
                 }}
 
-        self.validate_data(data)
-        self.data = data
+        self.data = self.validate_data(data)
         return self
 
 
