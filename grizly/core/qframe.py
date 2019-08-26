@@ -13,9 +13,15 @@ from grizly.io.sqlbuilder import (
     build_column_strings
 )
 
-from grizly.io.excel import read_excel
+from grizly.io.excel import (
+    read_excel,
+    copy_df_to_excel
+)
+
 from grizly.io.etl import *
 from grizly.core.utils import *
+
+import openpyxl
 
 def prepend_table(data, expression):
     field_regex = r"\w+[a-z]"
@@ -79,7 +85,7 @@ class QFrame:
             Path to json file.
 
         """ 
-        json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
+        json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
         with open(json_path, 'w') as f:
             json.dump(self.data, f)
         print(f"Data saved in {json_path}")
@@ -87,7 +93,7 @@ class QFrame:
 
     def read_json(self, json_path=''):
         """
-        Reads QFrame.data from json file. By default reads data from your_directory\json\qframe_data.json'
+        Reads QFrame.data from json file. By default reads data from your_directory\qframe_data.json'
 
         Parameters:
         ----------
@@ -95,7 +101,7 @@ class QFrame:
             Path to json file.
 
         """ 
-        json_path = json_path if json_path else os.path.join(os.getcwd(), 'json', 'qframe_data.json')
+        json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
         with open(json_path, 'r') as f:
             data = json.load(f)
             self.validate_data(data)
@@ -692,6 +698,13 @@ class QFrame:
         df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists, 
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
+
+    def to_excel(self, excel_path, sheet_name='', startrow=0, startcol=0):
+        """
+        Saves data in excel.
+        """
+        df = self.to_df()
+        copy_df_to_excel(df=df, excel_path=excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol)
 
     def copy(self):
         """
