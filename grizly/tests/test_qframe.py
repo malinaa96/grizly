@@ -85,7 +85,9 @@ def test_validation_data():
 
     orders_c = deepcopy(orders)
     orders_c["select"]["fields"]["Customer"]["as"] = "ABC DEF"
-    data = QFrame().validate_data(deepcopy(orders_c))
+    data = QFrame().validate_data(orders_c)
+
+    write_out(str(data))
     assert data["select"]["fields"]["Customer"]["as"] == "ABC_DEF"
 
 def test_from_dict():
