@@ -4,14 +4,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 import pandas as pd
 import csv
-from grizly.core.utils import read_store, check_if_exists
+
+from grizly.core.utils import (
+    read_config, 
+    check_if_exists
+)
 
 
-store = read_store()
-os.environ["HTTPS_PROXY"] = store["https"]
+config = read_config()
+os.environ["HTTPS_PROXY"] = config["https"]
 
 
-def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
+def to_csv(qf,csv_path, sql, engine, sep='\t'):
     """
     Writes table to csv file.
 
@@ -21,19 +25,12 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
         Path to csv file.
     sql : string
         SQL query.
-    db : {'Denodo', 'Redshift', 'MariaDB'}, default 'Denodo'
-        Name of database.
+    engine : str
+        Engine string.
     sep : string, default '\t'
         Separtor/delimiter in csv file.
     """
-    if db == 'Denodo':
-        engine = create_engine(store["denodo"])
-    elif db == 'Redshift':
-        engine = create_engine(store["redshift"], encoding='utf8',  poolclass=NullPool)
-    elif db == 'MariaDB':
-        engine = create_engine(store["mariadb"])
-    else:
-        raise ValueError("Invalid database.")
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
         
     try:
         con = engine.connect().connection
@@ -53,7 +50,7 @@ def to_csv(qf,csv_path, sql, db='Denodo', sep='\t'):
     con.close()
 
 
-def create_table(qf, table, schema=''):
+def create_table(qf, table, engine, schema=''):
     """
     Creates a new table in database if the table doesn't exist.
 
@@ -62,10 +59,12 @@ def create_table(qf, table, schema=''):
     qf : QFrame object
     table : string
         Name of SQL table.
+    engine : str
+        Engine string.
     schema : string, optional
         Specify the schema.
     """
-    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
+    engine = create_engine(engine, encoding='utf8', poolclass=NullPool)
 
     table_name = f'{schema}.{table}' if schema else f'{table}' 
 
@@ -100,7 +99,7 @@ def csv_to_s3(csv_path, s3_name):
     s3_name : string
         Name of s3. 
     """
-    s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
+    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
 
     if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -120,7 +119,7 @@ def s3_to_csv(s3_name, csv_path):
     csv_path : string
         Path to csv file.
     """
-    s3 = boto3.resource('s3', aws_access_key_id=store["akey"], aws_secret_access_key=store["skey"], region_name=store["region"])
+    s3 = boto3.resource('s3', aws_access_key_id=config["akey"], aws_secret_access_key=config["skey"], region_name=config["region"])
     bucket = s3.Bucket('teis-data')
 
     if s3_name[-4:] != '.csv': s3_name = s3_name + '.csv'
@@ -128,7 +127,6 @@ def s3_to_csv(s3_name, csv_path):
     with open(csv_path, 'wb') as data:
         bucket.download_fileobj('bulk/' + s3_name, data)
     print('{} uploaded to {}'.format(s3_name, csv_path))
-
 
 
 
@@ -146,12 +144,12 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
         change the column type, this needs to be changed TODO
     """
 
-    ACCESS_KEY = store['akey']
-    SECRET_KEY = store['skey']
-    REGION = store['region']
+    ACCESS_KEY = config['akey']
+    SECRET_KEY = config['skey']
+    REGION = config['region']
 
     if engine is None:
-        engine = create_engine(store['redshift'], poolclass=NullPool)
+        engine = create_engine("mssql+pyodbc://Redshift", poolclass=NullPool)
 
     s3 = boto3.resource('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY, region_name=REGION)
     bucket = s3.Bucket('teis-data')
@@ -175,15 +173,14 @@ def df_to_s3(df, table_name, schema, dtype="", sep='\t', engine=None, keep_csv=F
         else:
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
     except:
-        engine = create_engine(store['redshift'])
+        engine = create_engine("mssql+pyodbc://Redshift")
         if dtype !="":
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine, dtype=dtype)
         else:
             df.head(1).to_sql(table_name, schema=schema, index=False, con=engine)
 
 
-
-def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
+def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
     """
     Writes s3 to Redshift database.
 
@@ -204,8 +201,10 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
             * append: Insert new values to the existing table.
     sep : string, default '\t'
         Separator/delimiter in csv file.
+    use_col_names : boolean, default True
+        If True the data will be loaded by the names of columns.
     """
-    engine = create_engine(store["redshift"],encoding='utf8', poolclass=NullPool)
+    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
     
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
@@ -219,8 +218,62 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
         else:
             pass
     else:
-        if type(object) == QFrame:
-            create_table(qf, table, schema=schema)
+        create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
+
+    if s3_name[-4:] != '.csv': s3_name += '.csv'
+    
+    col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
+
+    print("Loading {} data into {} ...".format(s3_name,table_name))
+
+    sql = """
+        COPY {} {} FROM 's3://teis-data/bulk/{}' 
+        access_key_id '{}' 
+        secret_access_key '{}'
+        delimiter '{}'
+        NULL ''
+        IGNOREHEADER 1
+        REMOVEQUOTES
+        ;commit;
+        """.format(table_name, col_names, s3_name, config["akey"], config["skey"], sep)
+
+    engine.execute(sql)
+    print('Data has been copied to {}'.format(table_name))
+
+
+def s3_to_rds(table, s3_name, schema='', if_exists='fail', sep='\t'):
+    """
+    Writes s3 to Redshift database.
+
+    Parameters:
+    -----------
+    table : string
+        Name of SQL table.
+    s3_name : string
+        Name of s3. 
+    schema : string, optional
+        Specify the schema.
+    if_exists : {'fail', 'replace', 'append'}, default 'fail'
+            How to behave if the table already exists.
+            * fail: Raise a ValueError.
+            * replace: Clean table before inserting new values. NOTE: It won't drop the table.
+            * append: Insert new values to the existing table.
+    sep : string, default '\t'
+        Separator/delimiter in csv file.
+    """
+    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
+    
+    table_name = f'{schema}.{table}' if schema else f'{table}'
+
+    if check_if_exists(table, schema):
+        if if_exists == 'fail':
+            raise ValueError("Table {} already exists".format(table_name))
+        elif if_exists == 'replace':
+            sql ="DELETE FROM {}".format(table_name)
+            engine.execute(sql)
+            print('SQL table has been cleaned up successfully.')
+        else:
+            pass
 
     if s3_name[-4:] != '.csv': s3_name += '.csv'
 
@@ -235,7 +288,37 @@ def s3_to_rds(table, s3_name, qf=None, schema='', if_exists='fail', sep='\t'):
         IGNOREHEADER 1
         REMOVEQUOTES
         ;commit;
-        """.format(table_name, s3_name, store["akey"], store["skey"], sep)
+        """.format(table_name, s3_name, config["akey"], config["skey"], sep)
 
     engine.execute(sql)
     print('Data has been copied to {}'.format(table_name))
+
+def write_to(qf, table, schema):
+    """
+    Inserts values from QFrame object into given table. Name of columns in qf and table have to match each other.
+
+    Warning: QFrame object should not have Denodo defined as an engine.
+
+    Parameters:
+    -----
+    qf: QFrame object
+    table: string
+    schema: string
+    """  
+    sql = qf.get_sql().sql
+    columns = ', '.join(qf.data['select']['sql_blocks']['select_aliases'])
+    if schema!='':
+        sql_statement = f"INSERT INTO {schema}.{table} ({columns}) {sql}"
+    else:
+        sql_statement = f"INSERT INTO {table} ({columns}) {sql}"
+    engine = create_engine(qf.engine)
+    engine.execute(sql_statement)
+    print(f'Data has been written to {table}')
+
+
+
+
+
+
+
+

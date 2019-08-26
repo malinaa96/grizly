@@ -5,17 +5,20 @@ import pandas as pd
 from sqlalchemy.pool import NullPool
 
 
-def read_store():
-    json_path = os.path.join(os.getcwd(), 'json', 'etl_store.json')
+def read_config():
+    json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
     with open(json_path, 'r') as f:
-                store = json.load(f)
-    return store
+                config = json.load(f)
+    return config
 
 
-store = read_store()
-os.environ["HTTPS_PROXY"] = store["https"]
+config = read_config()
+os.environ["HTTPS_PROXY"] = config["https"]
 
-def columns_to_excel(table, excel_path, schema, db='denodo'):
+def columns_to_excel(table, excel_path, schema):
+    """
+    Get columns from Denodo table
+    """
     query = f"""
         SELECT column_name
         FROM get_view_columns()
@@ -23,16 +26,17 @@ def columns_to_excel(table, excel_path, schema, db='denodo'):
             AND database_name = '{schema}'
         """
 
-    engine = create_engine(store[db])
+    engine = create_engine("mssql+pyodbc://DenodoODBC")
     col_names = pd.read_sql(query, engine)
     col_names.to_excel(excel_path, index=False)
     return "Columns saved in excel."
+
 
 def check_if_exists(table, schema=''):
     """
     Checks if a table exists in Redshift.
     """
-    engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
+    engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
     if schema == '':
         table_name = table
         sql_exists = "select * from information_schema.tables where table_name = '{}' ". format(table)
@@ -72,7 +76,7 @@ def delete_where(table, schema='', *argv):
     table_name = f'{schema}.{table}' if schema else f'{table}'
 
     if check_if_exists(table, schema):
-        engine = create_engine(store["redshift"], encoding='utf8', poolclass=NullPool)
+        engine = create_engine("mssql+pyodbc://Redshift", encoding='utf8', poolclass=NullPool)
 
         if argv is not None:
             for arg in argv:
@@ -81,13 +85,6 @@ def delete_where(table, schema='', *argv):
                 print(f'Records from table {table_name} where {arg} has been removed successfully.')
     else:
         print(f"Table {table_name} doesn't exist.")
-
-
-def remove_from_s3(table_name, bucket_name="teis-data", file_extension="csv"):
-    """ Requires configuration of AWS CLI (in CMD: >>aws configure) """
-
-    os.system("SET HTTPS_PROXY=nyc3.sme.zscalertwo.net:10156")
-    os.system(f"aws s3api delete-object --bucket {bucket_name} --key bulk/{table_name}.{file_extension}")
 
 
 def copy_table(schema, copy_from, to, engine=None):
@@ -102,7 +99,7 @@ def copy_table(schema, copy_from, to, engine=None):
     print(sql)
 
     if engine is None:
-        engine = create_engine(store["redshift"])
+        engine = create_engine("mssql+pyodbc://Redshift")
 
     engine.execute(sql)
 
