@@ -1,11 +1,12 @@
-import pandas
+import pandas as pd 
+import openpyxl
 
 
 def read_excel(excel_path, sheet_name="", query=""):
     if sheet_name != "":
-        fields = pandas.read_excel(excel_path, sheet_name=sheet_name).fillna("")
+        fields = pd.read_excel(excel_path, sheet_name=sheet_name).fillna("")
     else:
-        fields = pandas.read_excel(excel_path).fillna("")
+        fields = pd.read_excel(excel_path).fillna("")
 
     schema = "" if "schema" not in fields else fields["schema"][0]
     table = fields["table"][0]
@@ -41,3 +42,16 @@ def read_excel(excel_path, sheet_name="", query=""):
             pass
            
     return schema, table, columns_qf
+
+
+def copy_df_to_excel(df, excel_path, sheet_name='', startrow=0, startcol=0):
+    writer = pd.ExcelWriter(excel_path, engine='openpyxl')
+    book = openpyxl.load_workbook(excel_path)
+    writer.book = book
+    
+    writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
+
+    df.to_excel(writer, sheet_name=sheet_name,startrow=startrow,startcol=startcol,index=False,header=False)     
+    
+    writer.save()
+    writer.close()

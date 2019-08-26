@@ -6,7 +6,7 @@ from sqlalchemy.pool import NullPool
 
 
 def read_config():
-    json_path = os.path.join(os.getcwd(), 'json', 'etl_config.json')
+    json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
     with open(json_path, 'r') as f:
                 config = json.load(f)
     return config

@@ -76,7 +76,7 @@ def test_save_json_and_read_json():
     q = QFrame().from_dict(deepcopy(customers))
     q.save_json()
     q.read_json()
-    os.remove(os.path.join(os.getcwd(), 'json', 'qframe_data.json'))
+    os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
     assert q.data == customers
 
 
@@ -517,8 +517,6 @@ def test_union():
     assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
 
 
-
-    
 
 
 
