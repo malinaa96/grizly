@@ -8,12 +8,13 @@ from sqlalchemy.pool import NullPool
 def read_config():
     json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
     with open(json_path, 'r') as f:
-                config = json.load(f)
+        config = json.load(f)
     return config
 
 
 config = read_config()
 os.environ["HTTPS_PROXY"] = config["https"]
+
 
 def columns_to_excel(table, excel_path, schema):
     """
@@ -104,4 +105,3 @@ def copy_table(schema, copy_from, to, engine=None):
     engine.execute(sql)
 
     return "Success"
-

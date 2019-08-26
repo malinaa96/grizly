@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
 from grizly.io.sqlbuilder import (
-    get_sql, 
+    get_sql,
     build_column_strings
 )
 
@@ -48,18 +48,18 @@ class QFrame:
     engine : str
         Engine string. If empty then the engine string is "mssql+pyodbc://DenodoODBC"
 
-    field : Each field is a dictionary with these keys. For instance, a 
-            query field inside fields definition could look like 
-            
+    field : Each field is a dictionary with these keys. For instance, a
+            query field inside fields definition could look like
+
             data = {"Country":{"as":"country_name", "group_by":"group"
             , "table":"countries", "schema":"salestables"}}
 
-            In the above case "Country" is a field inside the data 
+            In the above case "Country" is a field inside the data
             dictionary
 
             Field attributes (keys):
             * as: the 'as' of the database column
-            * group_by: If this column is grouped. If it's a dim it's always a 
+            * group_by: If this column is grouped. If it's a dim it's always a
             group. If it's a num it can be any group agg (sum, count, max, min, etc.)
             * expression: if this is a calculated field, this is an sql expression like
             column_name * 2 or 'string_value' etc.
@@ -73,7 +73,7 @@ class QFrame:
         self.fieldattrs = ["type", "as", "group_by", "expression", "select", "custom_type", "order_by"]
         self.fieldtypes = ["dim", "num"]
         self.metaattrs = ["limit", "where", "having"]
-         
+
 
     def save_json(self, json_path=''):
         """
@@ -84,7 +84,7 @@ class QFrame:
         json_path : str
             Path to json file.
 
-        """ 
+        """
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
         with open(json_path, 'w') as f:
             json.dump(self.data, f)
@@ -100,7 +100,7 @@ class QFrame:
         json_path : str
             Path to json file.
 
-        """ 
+        """
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
         with open(json_path, 'r') as f:
             data = json.load(f)
@@ -110,27 +110,33 @@ class QFrame:
 
     def validate_data(self, data):
         # validating fields, need to validate other stuff too
-        data = data["select"]
+        fields = data["select"]["fields"]
 
-        for field_key in data['fields']:
-            for key_attr in data['fields'][field_key]:
+        for field in fields:
+            for key_attr in fields[field]:
                 if key_attr not in set(self.fieldattrs):
                     raise AttributeError("Your columns have invalid attributes.")
 
-        for field_key in data["fields"]:
-            if "type" in data["fields"][field_key]:
-               if data["fields"][field_key]["type"] not in self.fieldtypes:
+        for field in fields:
+            if "type" in fields[field]:
+               if fields[field]["type"] not in self.fieldtypes:
                     raise ValueError("Your columns have invalid types.")
             else:
                 raise KeyError("Some of your columns don't have types.")
 
-   
+
+        for field in fields:
+            if "as" in fields[field]:
+                fields[field]["as"] = fields[field]["as"].replace(" ", "_")
+
+        return data
+
+
     def from_dict(self, data):
-        self.validate_data(data)
-        self.data = data
+        self.data = self.validate_data(data)
         return self
 
-       
+
     def read_excel(self, excel_path, sheet_name="", query=""):
         schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
 
@@ -162,11 +168,12 @@ class QFrame:
         Examples:
         --------
             >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
-    
+
         """
+
         for field in fields:
             if field in self.data["select"]["fields"]:
-                self.data["select"]["fields"][field]["as"] = fields[field]
+                self.data["select"]["fields"][field]["as"] = fields[field].replace(" ", "_")
         return self
 
 
@@ -182,13 +189,13 @@ class QFrame:
         Examples:
         --------
             >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
-    
+
         """
         if isinstance(fields, str) : fields = [fields]
 
         for field in fields:
             self.data["select"]["fields"].pop(field, f"Field {field} not found.")
-         
+
         return self
 
 
@@ -201,7 +208,7 @@ class QFrame:
             >>> q.distinct()
         """
         self.data["select"]["distinct"] = 1
-         
+
         return self
 
 
@@ -216,12 +223,12 @@ class QFrame:
         >>> orders = dict with order table fields
         >>> q = QFrame().from_dict(orders)
         >>> expr = q.query(
-                            "country!='Italy' 
+                            "country!='Italy'
                                 and (Customer='Enel' or Customer='Agip')
                                 or Value>1000
                             ")
         >>> assert expr.data["where"] == "
-                                    Orders.country!='Italy' 
+                                    Orders.country!='Italy'
                                     and (Orders.Customer='Enel' or Orders.Customer='Agip')
                                     or Orders.Value>1000
                                     "
@@ -239,7 +246,7 @@ class QFrame:
             if 'where' not in self.data['select'] or if_exists=='replace':
                 self.data["select"]["where"] = query
             elif if_exists=='append':
-                self.data["select"]["where"] += f" {operator} {query}"		
+                self.data["select"]["where"] += f" {operator} {query}"
         return self
 
     def having(self, having, if_exists='append', operator='and' ):
@@ -247,7 +254,7 @@ class QFrame:
         HAVING
         -----
         Creates a "having" attribute inside the data dictionary.
-        Prepends the table name to each column field. 
+        Prepends the table name to each column field.
         So Country = 'Italy' becomes Orders.Country = 'Italy'
         >>> orders = dict with order table fields
         >>> q = QFrame().from_dict(orders)
@@ -262,13 +269,13 @@ class QFrame:
             How to add another condition to existing one.
         """
         if "union" in self.data["select"]:
-            print("""You can't add having clause inside union. Use select() method first. 
+            print("""You can't add having clause inside union. Use select() method first.
             (The GROUP BY and HAVING clauses are applied to each individual query, not the final result set.)""")
         else:
             if 'having' not in self.data['select'] or if_exists=='replace':
                 self.data["select"]["having"] = having
             elif if_exists=='append':
-                self.data["select"]["having"] += f" {operator} {having}"		
+                self.data["select"]["having"] += f" {operator} {having}"
         return self
 
     def assign(self, type="dim", group_by="", **kwargs):
@@ -287,7 +294,7 @@ class QFrame:
         --------
             >>> value_x_two = "Value * 2"
             >>> q.assign(value_x_two=value_x_two)
-            >>> assert q.data["fields"]["value_x_two"]["expression"] == 
+            >>> assert q.data["fields"]["value_x_two"]["expression"] ==
                     "Value * 2"
 
         """
@@ -298,7 +305,7 @@ class QFrame:
                 for key in kwargs:
                     expression = kwargs[key]
                     self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by": group_by, "expression": expression}
-         
+
         return self
 
 
@@ -327,7 +334,7 @@ class QFrame:
         for field in fields:
             self.data["select"]["fields"][field]["group_by"] = "group"
 
-         
+
         return self
 
 
@@ -359,7 +366,7 @@ class QFrame:
                         print("Field not found.")
             else:
                 return print("Aggregation type must be sum, count, min, max or avg.")
-         
+
         return self
 
 
@@ -383,10 +390,10 @@ class QFrame:
                 >>> q.orderby(["customer_id", "date"], [False, True])
                 >>> q.get_sql()
                 >>> print(q.sql)
-                    SELECT  customer_id, 
+                    SELECT  customer_id,
                             date,
                             bookings
-                    FROM 
+                    FROM
                         orders
                     ORDER BY
                         customer_id DESC,
@@ -396,10 +403,10 @@ class QFrame:
                 >>> q.orderby("customer_id")
                 >>> q.get_sql()
                 >>> print(q.sql)
-                    SELECT  customer_id, 
+                    SELECT  customer_id,
                             date,
                             bookings
-                    FROM 
+                    FROM
                         orders
                     ORDER BY
                         customer_id
@@ -418,9 +425,9 @@ class QFrame:
                 print(f"Field {field} not found.")
 
             iterator+=1
-         
+
         return self
-        
+
 
     def limit(self, limit):
         """
@@ -432,10 +439,10 @@ class QFrame:
             Number of rows to select.
         Examples:
         --------
-                >>> q.limit(100)          
+                >>> q.limit(100)
         """
         self.data["select"]["limit"] = str(limit)
-         
+
         return self
 
 
@@ -443,7 +450,7 @@ class QFrame:
         """
         Creates a subquery that looks like "select sq.col1, sq.col2 from (some sql) sq.
 
-        NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created 
+        NOTE: Selected fields will be placed in the new QFrame. Names of new fields are created
         as a concat of "sq." and alias in the parent QFrame.
 
         Parameters:
@@ -453,7 +460,7 @@ class QFrame:
 
         Examples:
         --------
-            qframe : 
+            qframe :
             q -> fields : customer_id as 'customer', date, order
 
             >>> q.select(["customer_id", "order"])
@@ -479,13 +486,13 @@ class QFrame:
                 if "custom_type" in sq_fields[field]:
                     new_fields[f"sq.{alias}"]["custom_type"] = sq_fields[field]["custom_type"]
 
-        if new_fields: 
+        if new_fields:
             data = {"select": {"fields": new_fields }, "sq": self.data}
             self.data = data
-        
+
         return self
-    
-    
+
+
     def show_duplicated_columns(self):
         """
         Shows duplicated columns.
@@ -577,7 +584,7 @@ class QFrame:
         csv_path : string
             Path to csv file.
         s3_name : string
-            Name of s3. 
+            Name of s3.
         """
         csv_to_s3(csv_path,s3_name)
         return self
@@ -592,7 +599,7 @@ class QFrame:
         table : string
             Name of SQL table.
         s3_name : string
-            Name of s3. 
+            Name of s3.
         schema : string, optional
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -606,7 +613,7 @@ class QFrame:
         s3_to_rds_qf(self, table, s3_name,  schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
-        
+
     def to_rds(self, table, csv_path, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
         """
         Writes QFrame table to Redshift database.
@@ -631,7 +638,7 @@ class QFrame:
         """
 
         self.get_sql()
-            
+
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep)
         csv_to_s3(csv_path, s3_name)
 
@@ -649,7 +656,7 @@ class QFrame:
         qf: QFrame object
         table: string
         schema: string
-        """  
+        """
         write_to(qf=self,table=table,schema=schema)
         return self
 
@@ -658,7 +665,7 @@ class QFrame:
         """
         Writes QFrame to DataFrame. Uses pandas.read_sql. Returns DataFrame.
 
-        TODO: DataFarme types should correspond to types defined in QFrame data. 
+        TODO: DataFarme types should correspond to types defined in QFrame data.
         """
         self.get_sql()
 
@@ -667,7 +674,7 @@ class QFrame:
         return df
 
 
-    def to_sql(self, table, engine, schema='', if_exists='fail', index=True, 
+    def to_sql(self, table, engine, schema='', if_exists='fail', index=True,
                 index_label=None, chunksize=None, dtype=None, method=None):
         """
         Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.read_sql.
@@ -685,7 +692,7 @@ class QFrame:
             * fail: Raise a ValueError.
             * replace: Drop the table before inserting new values.
             * append: Insert new values to the existing table.
-        
+
         index : bool, default True
             Write DataFrame index as a column. Uses `index_label` as the column
             name in the table.
@@ -702,7 +709,7 @@ class QFrame:
             the sqlite3 legacy mode.
         method : {None, 'multi', callable}, default None
             Controls the SQL insertion clause used:
-        
+
             * None : Uses standard SQL ``INSERT`` clause (one per row).
             * 'multi': Pass multiple values in a single ``INSERT`` clause.
             * callable with signature ``(pd_table, conn, keys, data_iter)``.
@@ -710,7 +717,7 @@ class QFrame:
         df = self.to_df()
         con = create_engine(self.engine, encoding='utf8', poolclass=NullPool)
 
-        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists, 
+        df.to_sql(self, name=table, con=con, schema=schema, if_exists=if_exists,
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
@@ -723,7 +730,7 @@ class QFrame:
 
     def copy(self):
         """
-        Copies QFrame. 
+        Copies QFrame.
         """
         data = deepcopy(self.data)
         engine = deepcopy(self.engine)
@@ -756,17 +763,17 @@ class QFrame:
         html_table += "</table>"
         display(HTML(html_table))
 
-    
+
 
 def join(qframes=[], join_type=None, on=None, unique_col=True):
     """
-    Joins QFrame objects. Returns QFrame. 
+    Joins QFrame objects. Returns QFrame.
 
-    Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame. 
-    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFrame.     
-    
-    By default the joined QFrame will contain all fields from the first QFrame and all fields from the other QFrames 
-    which are not in the first QFrame. This approach prevents duplicates. If you want to choose the columns set unique_col=False and 
+    Name of each field is a concat of: "sq" + position of parent QFrame in qframes + "." + alias in their parent QFrame.
+    If the fields have the same aliases in their parent QFrames they will have the same aliases in joined QFrame.
+
+    By default the joined QFrame will contain all fields from the first QFrame and all fields from the other QFrames
+    which are not in the first QFrame. This approach prevents duplicates. If you want to choose the columns set unique_col=False and
     after performing join please remove fields with the same aliases or rename the aliases.
 
     Parameters:
@@ -776,11 +783,11 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
     join_type : str or list
         Join type or a list of join types.
     on : str or list
-        List of on join conditions. In case of CROSS JOIN set the condition on 0. 
-        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}." 
-        if you want to refer to the column. Check examples. 
+        List of on join conditions. In case of CROSS JOIN set the condition on 0.
+        NOTE: Structure of the elements of this list is very specific. You always have to use prefix "sq{qframe_position}."
+        if you want to refer to the column. Check examples.
     unique_col : boolean, default True
-        If True the joined QFrame will cotain all fields from the first QFrame and all fields from other QFrames which 
+        If True the joined QFrame will cotain all fields from the first QFrame and all fields from other QFrames which
         are not repeated. If False the joined QFrame will contain all fields from every QFrame.
 
     NOTE: Order of the elements in join_type and on list is important.
@@ -795,15 +802,15 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
         >>> q_joined = join(qframes=[q1,q2], join_type="LEFT JOIN", on="sq1.customer_id=sq2.customer_id")
 
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
                             sq2.ord as 'ord'
 
         >>> q_joined.get_sql()
         >>> print(q_joined.sql)
-            SELECT  sq1.customer_id as 'customer_id', 
-                    sq1.orders as 'orders', 
-                    sq2.ord as 'ord' 
-            FROM 
+            SELECT  sq1.customer_id as 'customer_id',
+                    sq1.orders as 'orders',
+                    sq2.ord as 'ord'
+            FROM
                 (q1.sql) sq1
             LEFT JOIN
                 (q2.sql) sq2
@@ -817,34 +824,34 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
 
         >>> q_joined = join(qframes=[q1,q2,q3], join_type=["CROSS JOIN", "inner join"], on=[0, "sq2.customer_id=sq3.id"], unique_col=False)
 
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders', 
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders',
                             sq2.customer_id as 'customer_id', sq2.ord as 'ord',
                             sq3.id as 'id', sq3.orders as 'orders', sq3.date as 'date'
 
         >>> q_joined.show_duplicated_columns()
-            DUPLICATED COLUMNS: 
+            DUPLICATED COLUMNS:
                 customer_id : ['sq1.customer_id', 'sq2.customer_id']
                 orders : ['sq1.orders', 'sq3.orders']
 
         >>> q_joined.remove(['sq2.customer_id', 'sq3.id'])
-        >>> q_joined.rename({'sq1.orders': 'orders_1', 'sq2.ord': 'orders_2', 'sq3.orders' : 'orders_3})        
+        >>> q_joined.rename({'sq1.orders': 'orders_1', 'sq2.ord': 'orders_2', 'sq3.orders' : 'orders_3})
 
-        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders_1', 
+        q_joined -> fields: sq1.customer_id as 'customer_id', sq1.orders as 'orders_1',
                             sq2.ord as 'orders_2',
                             sq3.orders as 'orders_3', sq3.date as 'date
 
         >>> q_joined.get_sql()
         >>> print(q_joined.sql)
-            SELECT  sq1.customer_id as 'customer_id', 
-                    sq1.orders as 'orders_1', 
+            SELECT  sq1.customer_id as 'customer_id',
+                    sq1.orders as 'orders_1',
                     sq2.ord as 'orders_2',
                     sq3.orders as 'orders_3',
-                    sq3.date as 'date 
-            FROM 
+                    sq3.date as 'date
+            FROM
                 (q1.sql) sq1
             CROSS JOIN
                 (q2.sql) sq2
-            INNER JOIN 
+            INNER JOIN
                 (q3.sql) sq3 ON sq2.customer_id=sq3.id
 
     """
@@ -860,7 +867,7 @@ def join(qframes=[], join_type=None, on=None, unique_col=True):
         iterator += 1
         data[f"sq{iterator}"] = deepcopy(q.data)
         sq = deepcopy(q.data['select'])
-            
+
         for alias in sq["sql_blocks"]["select_aliases"]:
             if unique_col and alias in aliases:
                 continue
@@ -911,7 +918,7 @@ def union(qframes=[], union_type=None):
 
         >>> q_unioned.get_sql()
         >>> print(q_unioned.sql)
-        
+
             q1.sql
             UNION ALL
             q2.sql
@@ -929,25 +936,20 @@ def union(qframes=[], union_type=None):
     for q in qframes:
         q.create_sql_blocks()
         iterator += 1
-        data[f"sq{iterator}"] = deepcopy(q.data) 
-                
+        data[f"sq{iterator}"] = deepcopy(q.data)
+
     fields = deepcopy(data["sq1"]["select"]["fields"])
-    
+
     for field in fields:
         if "select" in fields[field] and fields[field]["select"] == 0:
             continue
         else:
-            alias = field if "as" not in fields[field] else fields[field]["as"]  
+            alias = field if "as" not in fields[field] else fields[field]["as"]
             data["select"]["fields"][alias] = {"type": fields[field]["type"]}
             if "custom_type" in fields[field]:
                 data["select"]["fields"][alias]["custom_type"] = fields[field]["custom_type"]
-                
+
     data["select"]["union"] = {"union_type": union_type}
 
     print("Data unioned successfully.")
     return QFrame(data=data, engine=qframes[0].engine)
-
-
-
-
-    

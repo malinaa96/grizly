@@ -6,13 +6,13 @@ from sqlalchemy import create_engine
 from pandas import read_sql, read_csv, merge, concat
 
 from grizly.core.qframe import (
-    QFrame, 
-    union, 
+    QFrame,
+    union,
     join
 )
 
-from grizly.io.sqlbuilder import ( 
-    build_column_strings, 
+from grizly.io.sqlbuilder import (
+    build_column_strings,
     get_sql
 )
 
@@ -21,15 +21,15 @@ orders = {
     "select": {
         "fields": {
             "Order": {
-                "type": "dim", 
+                "type": "dim",
                 "as": "Bookings"
             },
             "Part": {
-                "type": "dim", 
+                "type": "dim",
                 "as": "Part"
             },
             "Customer": {
-                "type": "dim", 
+                "type": "dim",
                 "as": "Customer"
             },
             "Value": {"type": "num"
@@ -43,11 +43,11 @@ customers = {
     "select": {
         "fields": {
             "Country": {
-                "type": "dim", 
+                "type": "dim",
                 "as": "Country"
             },
             "Customer": {
-                "type": "dim", 
+                "type": "dim",
                 "as": "Customer"
             }
         }
@@ -83,6 +83,10 @@ def test_save_json_and_read_json():
 def test_validation_data():
     QFrame().validate_data(deepcopy(orders))
 
+    orders_c = deepcopy(orders)
+    orders_c["select"]["fields"]["Customer"]["as"] = "ABC DEF"
+    data = QFrame().validate_data(deepcopy(orders_c))
+    assert data["select"]["fields"]["Customer"]["as"] == "ABC_DEF"
 
 def test_from_dict():
     q = QFrame().from_dict(deepcopy(customers))
@@ -110,7 +114,7 @@ def test_create_sql_blocks():
 
 def test_rename():
     q = QFrame().from_dict(deepcopy(orders))
-    q.rename({'Customer': 'Customer_Name', 'Value': 'Sales'})
+    q.rename({'Customer': 'Customer Name', 'Value': 'Sales'})
     assert q.data['select']['fields']['Customer']['as'] == 'Customer_Name'
     assert q.data['select']['fields']['Value']['as'] == 'Sales'
 
@@ -127,13 +131,13 @@ def test_distinct():
     sql = q.get_sql().sql
     assert sql[7:15].upper() == 'DISTINCT'
 
-    
+
 def test_query():
     q = QFrame().from_dict(deepcopy(orders))
     q.query("country!='France'")
     q.query("country!='Italy'",if_exists='replace')
     q.query("(Customer='Enel' or Customer='Agip')")
-    q.query("Value>1000",operator='or'          
+    q.query("Value>1000",operator='or'
     )
     testexpr = "country!='Italy' and (Customer='Enel' or Customer='Agip') or Value>1000"
     assert q.data["select"]["where"] == testexpr
@@ -142,7 +146,7 @@ def test_having():
     q = QFrame().from_dict(deepcopy(orders))
     q.query("sum(Value)==1000")
     q.query("sum(Value)>1000",if_exists='replace')
-    q.query("count(Customer)<=65")        
+    q.query("count(Customer)<=65")
     testexpr = "sum(Value)>1000 and count(Customer)<=65"
     assert q.data["select"]["where"] == testexpr
 
@@ -153,9 +157,9 @@ def test_assign():
     q.assign(Value_div="Value/100", type='num')
     assert q.data["select"]["fields"]["value_x_two"]["expression"] == "Value * 2"
     assert q.data["select"]["fields"]["Value_div"] == {
-        "type": "num", 
-        "as": "Value_div", 
-        "group_by": "", 
+        "type": "num",
+        "as": "Value_div",
+        "group_by": "",
         "expression": "Value/100"
         }
 
@@ -255,7 +259,7 @@ def test_get_sql():
     sql = q.get_sql().sql
     # write_out(str(sql))
     assert clean_testexpr(sql) == clean_testexpr(testsql)
-    assert q.get_sql().sql == get_sql(q.data) 
+    assert q.get_sql().sql == get_sql(q.data)
 
 
 def test_get_sql_with_select_attr():
@@ -263,7 +267,7 @@ def test_get_sql_with_select_attr():
     q = QFrame().read_excel(excel_path, sheet_name="orders")
 
     testsql = """
-        SELECT Order_Nr AS Order_Number, 
+        SELECT Order_Nr AS Order_Number,
                 Part,
                 CustomerID_1,
                 sum(Value) AS Value,
@@ -281,7 +285,7 @@ def test_get_sql_with_select_attr():
     sql = q.get_sql().sql
     # write_out(str(sql))
     assert clean_testexpr(sql) == clean_testexpr(testsql)
-    assert clean_testexpr(q.get_sql().sql) == clean_testexpr(get_sql(q.data)) 
+    assert clean_testexpr(q.get_sql().sql) == clean_testexpr(get_sql(q.data))
 
 
 
@@ -293,7 +297,7 @@ def test_to_csv():
                     'TrackId': {'type': 'dim'},
                     'UnitPrice': {'type': 'num'},
                     'Quantity': {'type': 'num'}
-                }, 
+                },
         'table':'invoice_items'}})
     q.assign(UnitPriceFlag='CASE WHEN UnitPrice>1 THEN 1 ELSE 0 END', type='dim')
     q.rename({'TrackId': 'Track'})
@@ -414,7 +418,7 @@ def test_join_1():
     # using pandas
     tracks_qf.get_sql()
     tracks_df = read_sql(sql=tracks_qf.sql, con=engine)
-    
+
     test_df = merge(test_df, tracks_df, how='left', on=['TrackId'])
 
     assert joined_df.equals(test_df)
@@ -515,10 +519,3 @@ def test_union():
 
     assert clean_testexpr(sql) == clean_testexpr(testsql)
     assert unioned_qf.to_df().equals(concat([playlists_qf.to_df(), playlists_qf.to_df()], ignore_index=True))
-
-
-
-
-
-
-

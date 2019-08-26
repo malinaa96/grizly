@@ -26,18 +26,18 @@ def build_column_strings(data):
 
             else:
                 if fields[field]["group_by"] == "sum":
-                    expr = f"sum({expr})" 
+                    expr = f"sum({expr})"
                 elif fields[field]["group_by"] == "count":
-                    expr = f"count({expr})" 
+                    expr = f"count({expr})"
                 elif fields[field]["group_by"] == "max":
-                    expr = f"max({expr})" 
+                    expr = f"max({expr})"
                 elif fields[field]["group_by"] == "min":
-                    expr = f"min({expr})" 
+                    expr = f"min({expr})"
                 elif fields[field]["group_by"] == "avg":
-                    expr = f"avg({expr})" 
+                    expr = f"avg({expr})"
                 else:
                     raise AttributeError("Invalid aggregation type.")
-                
+
                 group_values.append(alias)
 
         if "select" not in fields[field] or "select" in fields[field] and fields[field]["select"] != 0:
@@ -49,7 +49,7 @@ def build_column_strings(data):
                 type = "VARCHAR(500)"
             elif fields[field]["type"] == "num":
                 type = "FLOAT(53)"
-            
+
             if "order_by" in fields[field]:
                 order = fields[field]["order_by"]  if fields[field]["order_by"].upper() == 'DESC' else ''
                 order_by.append(f"{alias} {order}")
@@ -58,22 +58,22 @@ def build_column_strings(data):
             select_aliases.append(alias)
             types.append(type)
 
-    # validations 
+    # validations
     # TODO: Check if the group by is correct - group by expression or columns in expression
     # if group_values != []:
     #     not_grouped = set(select_aliases) - set(group_values) - set(group_dimensions)
     #     if not_grouped:
     #         raise AttributeError(f"Fields {not_grouped} must appear in the GROUP BY clause or be used in an aggregate function.")
-    
+
     sql_blocks = {
-                    "select_names": select_names, 
-                    "select_aliases": select_aliases, 
-                    "group_dimensions": group_dimensions, 
-                    "group_values": group_values, 
+                    "select_names": select_names,
+                    "select_aliases": select_aliases,
+                    "group_dimensions": group_dimensions,
+                    "group_values": group_values,
                     "order_by": order_by,
                     "types": types
                 }
-    
+
     return sql_blocks
 
 def get_sql(data):
@@ -81,7 +81,7 @@ def get_sql(data):
     sql = ''
 
     if "union" in data["select"]:
-        iterator = 1 
+        iterator = 1
         sq_data = deepcopy(data[f'sq{iterator}'])
         sql += get_sql(sq_data)
 
@@ -89,11 +89,11 @@ def get_sql(data):
             union_type = data["select"]["union"]["union_type"][iterator-1]
             sq_data = deepcopy(data[f'sq{iterator+1}'])
             right_table = get_sql(sq_data)
-            
+
             sql += f" {union_type} {right_table}"
             iterator += 1
 
-    elif "union" not in data["select"]:    
+    elif "union" not in data["select"]:
         sql += "SELECT"
 
         if "distinct" in data["select"] and data["select"]["distinct"] == 1:
@@ -105,7 +105,7 @@ def get_sql(data):
         if "table" in data["select"]:
             if "schema" in data["select"] and data["select"]["schema"] != "":
                 sql += " FROM {}.{}".format(data["select"]["schema"],data["select"]["table"])
-            else: 
+            else:
                 sql += " FROM {}".format(data["select"]["table"])
 
         elif "join" in data["select"]:
@@ -125,7 +125,7 @@ def get_sql(data):
                     sql += f" ON {on}"
                 iterator += 1
 
-        elif "table" not in data["select"] and "join" not in data["select"] and "sq" in data:      
+        elif "table" not in data["select"] and "join" not in data["select"] and "sq" in data:
             sq_data = deepcopy(data["sq"])
             sq = get_sql(sq_data)
             sql += f" FROM ({sq}) sq"
@@ -149,4 +149,3 @@ def get_sql(data):
 
     sql = sqlparse.format(sql, reindent=True, keyword_case="upper")
     return sql
-

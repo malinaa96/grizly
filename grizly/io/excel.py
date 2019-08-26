@@ -1,4 +1,4 @@
-import pandas as pd 
+import pandas as pd
 import openpyxl
 
 
@@ -15,15 +15,15 @@ def read_excel(excel_path, sheet_name="", query=""):
         fields = fields.query(query)
 
     columns_qf = {}
-    for index, row in fields.iterrows(): 
+    for index, row in fields.iterrows():
         if row["column"] == "":
             attr = row["column_as"]
-        else:   
+        else:
             attr = row["column"]
         columns_qf[attr] = {}
         columns_qf[attr]["type"] = row["column_type"]
         columns_qf[attr]["group_by"] = row["group_by"]
-        try: 
+        try:
             if row["expression"] != "":
                 columns_qf[attr]["expression"] = row["expression"]
         except:
@@ -40,7 +40,7 @@ def read_excel(excel_path, sheet_name="", query=""):
                 columns_qf[attr]["custom_type"] = row["custom_type"]
         except:
             pass
-           
+
     return schema, table, columns_qf
 
 
@@ -48,10 +48,10 @@ def copy_df_to_excel(df, excel_path, sheet_name='', startrow=0, startcol=0):
     writer = pd.ExcelWriter(excel_path, engine='openpyxl')
     book = openpyxl.load_workbook(excel_path)
     writer.book = book
-    
+
     writer.sheets = dict((ws.title, ws) for ws in book.worksheets)
 
-    df.to_excel(writer, sheet_name=sheet_name,startrow=startrow,startcol=startcol,index=False,header=False)     
-    
+    df.to_excel(writer, sheet_name=sheet_name,startrow=startrow,startcol=startcol,index=False,header=False)
+
     writer.save()
     writer.close()
