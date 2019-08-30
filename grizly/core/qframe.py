@@ -302,7 +302,11 @@ class QFrame:
             if kwargs is not None:
                 for key in kwargs:
                     expression = kwargs[key]
-                    self.data["select"]["fields"][key] = {"type": type, "as": key, "group_by": group_by, "expression": expression}
+                    self.data["select"]["fields"][key] = {
+                        "type": type, 
+                        "as": key, 
+                        "group_by": group_by, 
+                        "expression": expression}
 
         return self
 
@@ -453,8 +457,8 @@ class QFrame:
 
         Parameters:
         ----------
-        fields : list
-            List of fields to select.
+        fields : list or string
+            Fields in list or field as a string.
 
         Examples:
         --------
@@ -520,7 +524,47 @@ class QFrame:
             print("There are no duplicated columns.")
         return self
 
+    
+    def rearrange(self, fields):
+        """
+        Changes order of the columns.
 
+        Parameters:
+        ----------
+        fields : list or string
+            Fields in list or field as a string.
+
+        Examples:
+        ---------
+            qframe :
+            q -> fields : customer_id, date, order
+
+            >>> q.rearrange(["customer_id", "order", "date])
+
+        """
+        
+        if isinstance(fields, str) : fields = [fields]
+
+        old_fields = deepcopy(self.data['select']['fields'])
+        assert set(old_fields) == set(fields) and len(old_fields) == len(fields), "Fields are not matching, make sure that fields are the same as in your QFrame."
+
+        new_fields = {}
+        for field in fields :
+            new_fields[field] = old_fields[field]
+
+        self.data['select']['fields'] = new_fields
+
+        self.create_sql_blocks()
+
+        return self
+
+    def get_fields(self):
+        """
+        Returns list of fields names.
+        """ 
+        fields = list(self.data['select']['fields'].keys()) if self.data else []
+
+        return fields 
 
     def get_sql(self):
         """
@@ -719,13 +763,17 @@ class QFrame:
         index=index, index_label=index_label, chunksize= chunksize, dtype=dtype, method=method)
         return self
 
-    def to_excel(self, excel_path, sheet_name='', startrow=0, startcol=0):
+
+    def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
         """
         Saves data in excel.
         """
         df = self.to_df()
-        copy_df_to_excel(df=df, excel_path=excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol)
+        copy_df_to_excel(df=df, input_excel_path=input_excel_path, output_excel_path=output_excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol,index=index, header=header)
 
+        return df
+    
+    
     def copy(self):
         """
         Copies QFrame.

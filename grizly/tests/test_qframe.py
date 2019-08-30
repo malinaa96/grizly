@@ -87,7 +87,6 @@ def test_validation_data():
     orders_c["select"]["fields"]["Customer"]["as"] = "ABC DEF"
     data = QFrame().validate_data(orders_c)
 
-    write_out(str(data))
     assert data["select"]["fields"]["Customer"]["as"] == "ABC_DEF"
 
 def test_from_dict():
@@ -236,6 +235,17 @@ def test_select():
                 GROUP BY Customer
             """
     assert clean_testexpr(sql) == clean_testexpr(testsql)
+
+
+def test_rearrange():
+    q = QFrame().from_dict(deepcopy(customers))
+    q.rearrange(["Customer", "Country"])
+    assert q.get_fields() == ["Customer", "Country"]
+
+def test_get_fields():
+    q = QFrame().from_dict(deepcopy(customers))
+    fields = ["Country", "Customer"]
+    assert fields == q.get_fields()
 
 
 def test_get_sql():
