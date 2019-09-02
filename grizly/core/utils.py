@@ -105,3 +105,9 @@ def copy_table(schema, copy_from, to, engine=None):
     engine.execute(sql)
 
     return "Success"
+
+
+def set_cwd(*args):
+    cwd = os.environ['USERPROFILE']
+    cwd = os.path.join(cwd, *args)
+    return cwd
