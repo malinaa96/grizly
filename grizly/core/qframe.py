@@ -91,7 +91,7 @@ class QFrame:
         print(f"Data saved in {json_path}")
 
 
-    def read_json(self, json_path=''):
+    def read_json(self, json_path='', subquery=''):
         """
         Reads QFrame.data from json file. By default reads data from your_directory\qframe_data.json'
 
@@ -101,10 +101,18 @@ class QFrame:
             Path to json file.
 
         """
-        json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-            self.data = self.validate_data(data)
+        #AC: Add error handling if path is empty
+        #json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
+        if json_path == '':
+            raise ValueError("Path cannot be empty")
+        else:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+                if subquery == '':
+                    self.data = self.validate_data(data)
+                else:
+                    self.data = self.validate_data(data[subquery])
+            return self
 
 
     def validate_data(self, data):
