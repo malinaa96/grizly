@@ -668,23 +668,33 @@ class QFrame:
         """
         Writes QFrame table to Redshift database.
 
-        Parameters:
-        ----------
+        **Examples**
+
+        With defaults:
+
+        >>> q = QFrame(
+        >>>   ).to_rds(table='some_table', csv_path='some_path')
+
+        With schema:
+
+        >>> q = QFrame(
+        >>>   ).to_rds(schema='some_schema', table='some_table', csv_path='some_path')
+
+        **Parameters**
+
         table : string
-            Name of SQL table.
+            Name of SQL table
         csv_path : string
-            Path to csv file.
-        s3_name : string
-            Name of s3.
+            Path to csv file
         schema : string, optional
-            Specify the schema.
+            Specify the schema
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
-            How to behave if the table already exists.
-            * fail: Raise a ValueError.
+            How to behave if the table already exists
+            * fail: Raise a ValueError
             * replace: Clean table before inserting new values.
-            * append: Insert new values to the existing table.
+            * append: Insert new values to the existing table
         sep : string, default '\t'
-            Separator/delimiter in csv file.
+            Separator/delimiter in csv file
         """
 
         self.get_sql()
