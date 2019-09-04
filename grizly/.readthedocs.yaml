@@ -3,4 +3,4 @@ python:
    install:
       - method: setuptools
         path: grizly/setup.py
-    - requirements: requirements.txt
+      - requirements: requirements.txt
