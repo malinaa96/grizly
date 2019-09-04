@@ -3,3 +3,4 @@ sqlparse
 ipython
 sqlalchemy
 openpyxl
+boto3
