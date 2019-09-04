@@ -23,6 +23,7 @@ from grizly.core.utils import *
 
 import openpyxl
 
+
 def prepend_table(data, expression):
     field_regex = r"\w+[a-z]"
     escapes_regex = r"""[^"]+"|'[^']+'|and\s|or\s"""
@@ -75,15 +76,13 @@ class QFrame:
         self.metaattrs = ["limit", "where", "having"]
 
 
-    def save_json(self, json_path=''):
-        """
-        Saves QFrame.data to json file. By default data is saved in your_directory\json\qframe_data.json'
-
-        Parameters:
+    def save_json(self, json_path):
+        """Saves QFrame.data to json file.
+        
+        Parameters
         ----------
         json_path : str
-            Path to json file.
-
+             Path to json file.
         """
         json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
         with open(json_path, 'w') as f:
@@ -91,28 +90,74 @@ class QFrame:
         print(f"Data saved in {json_path}")
 
 
-    def read_json(self, json_path='', subquery=''):
-        """
-        Reads QFrame.data from json file. By default reads data from your_directory\qframe_data.json'
-
-        Parameters:
+    def read_json(self, json_path, subquery=''):
+        """Reads QFrame.data from json file.
+        
+        Parameters
         ----------
         json_path : str
             Path to json file.
-
+        subquery : str, optional
+            [description], by default ''
+        
+        Returns
+        -------
+        QFrame
+            QFrame
         """
-        #AC: Add error handling if path is empty
-        #json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
-        if json_path == '':
-            raise ValueError("Path cannot be empty")
-        else:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-                if subquery == '':
-                    self.data = self.validate_data(data)
-                else:
-                    self.data = self.validate_data(data[subquery])
-            return self
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+            if subquery == '':
+                self.data = self.validate_data(data)
+            else:
+                self.data = self.validate_data(data[subquery])
+        return self
+
+
+    def from_dict(self, data):
+        """Reads QFrame.data from dictionary.
+        
+        Parameters
+        ----------
+        data : dict
+            Dictionary structure holding fields, schema, table, sql information.
+        
+        Returns
+        -------
+        QFrame
+            QFrame
+        """
+        self.data = self.validate_data(data)
+        return self
+
+
+    def read_excel(self, excel_path, sheet_name="", query=""):
+        """Reads fields information from excel file.
+        
+        Parameters
+        ----------
+        excel_path : str
+            Path to excel file.
+        sheet_name : str, optional
+            Sheet name, by default ""
+        query : str, optional
+            Filter for rows in excel file, by default ""
+        
+        Returns
+        -------
+        QFrame
+            QFrame
+        """
+        schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
+
+        data = {"select": {
+                    "fields": columns_qf,
+                    "schema": schema,
+                    "table": table
+                }}
+
+        self.data = self.validate_data(data)
+        return self
 
 
     def validate_data(self, data):
@@ -139,44 +184,27 @@ class QFrame:
         return data
 
 
-    def from_dict(self, data):
-        self.data = self.validate_data(data)
-        return self
-
-
-    def read_excel(self, excel_path, sheet_name="", query=""):
-        schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
-
-        data = {"select": {
-                    "fields": columns_qf,
-                    "schema": schema,
-                    "table": table
-                }}
-
-        self.data = self.validate_data(data)
-        return self
-
-
     def create_sql_blocks(self):
         self.data['select']['sql_blocks'] = build_column_strings(self.data)
         return self
 
 
     def rename(self, fields):
-        """
-        Renames columns.
-
-        Parameters:
-        -----------
+        """Renames columns.
+        
+        Examples
+        --------
+        >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
+        
+        Parameters
+        ----------
         fields : dict
             Dictionary of columns and their new names.
-
-        Examples:
-        --------
-            >>> q.rename({"sq1.customer_id" : "customer_id", "sq2.customer_id" : "supplier_id"})
-
+        
+        Returns
+        -------
+        QFrame
         """
-
         for field in fields:
             if field in self.data["select"]["fields"]:
                 self.data["select"]["fields"][field]["as"] = fields[field].replace(" ", "_")
@@ -184,17 +212,20 @@ class QFrame:
 
 
     def remove(self, fields):
-        """
-        Removes fields.
+        """Removes fields.
 
-        Parameters:
-        -----------
+        Examples
+        --------
+        >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
+
+        Parameters
+        ----------
         fields : list
             List of fields to remove.
-
-        Examples:
-        --------
-            >>> q.remove(["sq1.customer_id", "sq2.customer_id"])
+        
+        Returns
+        -------
+        QFrame
 
         """
         if isinstance(fields, str) : fields = [fields]
@@ -640,7 +671,7 @@ class QFrame:
         return self
 
 
-    def s3_to_rds(self, table, schema='', if_exists='fail', sep='\t', use_col_names=True):
+    def s3_to_rds(self, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
         """
         Writes s3 to Redshift database.
 
@@ -658,7 +689,7 @@ class QFrame:
         sep : string, default '\t'
             Separator/delimiter in csv file.
         """
-        s3_to_rds_qf(self, table, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        s3_to_rds_qf(self, table, s3_name=s3_name, schema=schema , if_exists=if_exists, sep=sep, use_col_names=use_col_names)
         return self
 
 
@@ -678,7 +709,8 @@ class QFrame:
         >>> q = QFrame(
         >>>   ).to_rds(schema='some_schema', table='some_table', csv_path='some_path')
 
-        **Parameters**
+        Parameters
+        ----------
 
         table : string
             Name of SQL table
@@ -702,7 +734,7 @@ class QFrame:
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
         csv_to_s3(csv_path)
 
-        s3_to_rds_qf(self, table, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
+        s3_to_rds_qf(self, table, s3_name=os.path.basename(csv_path), schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
 
 
         return self
@@ -783,9 +815,30 @@ class QFrame:
 
 
     def to_excel(self, input_excel_path, output_excel_path, sheet_name='', startrow=0, startcol=0, index=False, header=False):
+        """[summary]
+        
+        Parameters
+        ----------
+        input_excel_path : [type]
+            [description]
+        output_excel_path : [type]
+            [description]
+        sheet_name : str, optional
+            [description], by default ''
+        startrow : int, optional
+            [description], by default 0
+        startcol : int, optional
+            [description], by default 0
+        index : bool, optional
+            [description], by default False
+        header : bool, optional
+            [description], by default False
+        
+        Returns
+        -------
+        QFrame
         """
-        Saves data in excel.
-        """
+
         df = self.to_df()
         copy_df_to_excel(df=df, input_excel_path=input_excel_path, output_excel_path=output_excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol,index=index, header=header)
 

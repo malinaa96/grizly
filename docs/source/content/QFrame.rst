@@ -34,12 +34,23 @@ get_fields
 ===
 I/O
 ===
+----------
+save_json
+----------
+
+.. automethod:: grizly.QFrame.save_json
 
 ----------
 read_json
 ----------
 
 .. automethod:: grizly.QFrame.read_json
+
+----------
+read_excel
+----------
+
+.. automethod:: grizly.QFrame.read_excel
 
 ----------
 to_rds

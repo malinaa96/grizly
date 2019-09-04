@@ -252,7 +252,7 @@ def df_clean(df):
     return df
 
 
-def s3_to_rds_qf(qf, table, schema='', if_exists='fail', sep='\t', use_col_names=True):
+def s3_to_rds_qf(qf, table, s3_name, schema='', if_exists='fail', sep='\t', use_col_names=True):
     """
     Writes s3 to Redshift database.
 
@@ -262,6 +262,8 @@ def s3_to_rds_qf(qf, table, schema='', if_exists='fail', sep='\t', use_col_names
         QFrame object or None
     table : string
         Name of SQL table.
+    s3_name : string
+    
     schema : string, optional
         Specify the schema.
     if_exists : {'fail', 'replace', 'append'}, default 'fail'
@@ -293,8 +295,7 @@ def s3_to_rds_qf(qf, table, schema='', if_exists='fail', sep='\t', use_col_names
     else:
         create_table(qf, table, engine="mssql+pyodbc://Redshift", schema=schema)
 
-    # if s3_name[-4:] != '.csv': s3_name += '.csv'
-    s3_name = os.path.basename(csv_path)
+    if s3_name[-4:] != '.csv': s3_name += '.csv'
 
     col_names = '(' + ', '.join(qf.data['select']['sql_blocks']['select_aliases']) + ')' if use_col_names else ''
 
