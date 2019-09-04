@@ -4,6 +4,7 @@ botocore==1.12.200
 ipython==7.6.1
 ipywidgets==7.5.0
 lxml==4.3.4
+openpyxl
 pandas==0.24.2
 Pillow==6.1.0
 pytz==2019.1
