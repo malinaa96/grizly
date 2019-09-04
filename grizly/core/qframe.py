@@ -250,32 +250,25 @@ class QFrame:
 
 
 
-    def query(self, query, if_exists='append',operator='and' ):
-        """
-        Query
-        -----
-        Creates a "where" attribute inside the data dictionary.
-        Prepends the table name to each column field. So
-        Country = 'Italy' becomes Orders.Country = 'Italy'
-        >>> orders = dict with order table fields
-        >>> q = QFrame().from_dict(orders)
-        >>> expr = q.query(
-                            "country!='Italy'
-                                and (Customer='Enel' or Customer='Agip')
-                                or Value>1000
-                            ")
-        >>> assert expr.data["where"] == "
-                                    Orders.country!='Italy'
-                                    and (Orders.Customer='Enel' or Orders.Customer='Agip')
-                                    or Orders.Value>1000
-                                    "
+    def query(self, query, if_exists='append', operator='and' ):
+        """Creates a "where" attribute inside the data dictionary.
+        
+        Examples
+        --------
+        >>> q.query("country!='Italy'")
+
         Parameters
-        -----
-        query : string
-        if_exists :  {'append', 'replace'}
-            How to behave when the where clause already exists.
-        operator : {'and', 'or'}
-            How to add another condition to existing one.
+        ----------
+        query : str
+            [description]
+        if_exists : {'append', 'replace'}, optional
+            How to behave when the where clause already exists, by default 'append'
+        operator : {'and', 'or'}, optional
+            How to add another condition to existing one, by default 'and'
+        
+        Returns
+        -------
+        QFrame
         """
         if "union" in self.data["select"]:
             print("You can't add where clause inside union. Use select() method first.")
@@ -329,11 +322,7 @@ class QFrame:
 
         Examples:
         --------
-            >>> value_x_two = "Value * 2"
-            >>> q.assign(value_x_two=value_x_two)
-            >>> assert q.data["fields"]["value_x_two"]["expression"] ==
-                    "Value * 2"
-
+        >>> q.assign(value_x_two="Value * 2")
         """
         if "union" in self.data["select"]:
             print("You can't assign expressions inside union. Use select() method first.")
@@ -694,11 +683,10 @@ class QFrame:
 
 
     def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None):
-        """
-        Writes QFrame table to Redshift database.
+        """Writes QFrame table to Redshift database.
 
-        **Examples**
-
+        Examples
+        --------
         With defaults:
 
         >>> q = QFrame(
@@ -711,24 +699,30 @@ class QFrame:
 
         Parameters
         ----------
-
-        table : string
+        table : str
             Name of SQL table
-        csv_path : string
+        csv_path : str
             Path to csv file
-        schema : string, optional
+        schema : str, optional
             Specify the schema
-        if_exists : {'fail', 'replace', 'append'}, default 'fail'
-            How to behave if the table already exists
+        if_exists : {'fail', 'replace', 'append'}, optional
+            How to behave if the table already exists, by default 'fail'
+
             * fail: Raise a ValueError
             * replace: Clean table before inserting new values.
             * append: Insert new values to the existing table
-        sep : string, default '\t'
-            Separator/delimiter in csv file
-        chunksize : int, default None
-            If specified, return an iterator where chunksize is the number of rows to include in each chunk.
-        """
 
+        sep : str, optional
+            Separator/delimiter in csv file, by default '\t'
+        use_col_names : bool, optional
+            If True the data will be loaded by the names of columns, by default True
+        chunksize : int, optional
+            If specified, return an iterator where chunksize is the number of rows to include in each chunk, by default None
+        
+        Returns
+        -------
+        QFrame
+        """
         self.get_sql()
 
         to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
@@ -771,7 +765,7 @@ class QFrame:
         """
         Writes QFrame to DataFarme and then DataFarme to SQL database. Uses pandas.read_sql.
 
-        Parameters:
+        Parameters
         ----------
         table : string
             Name of SQL table.
@@ -781,6 +775,7 @@ class QFrame:
             Specify the schema.
         if_exists : {'fail', 'replace', 'append'}, default 'fail'
             How to behave if the table already exists.
+
             * fail: Raise a ValueError.
             * replace: Drop the table before inserting new values.
             * append: Insert new values to the existing table.
