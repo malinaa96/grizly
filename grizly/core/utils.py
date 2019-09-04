@@ -8,10 +8,10 @@ from sqlalchemy.pool import NullPool
 def read_config():
     try:
         json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
+        with open(json_path, 'r') as f:
+            config = json.load(f)
     except KeyError:
-        json_path = "Error with UserProfile"
-    with open(json_path, 'r') as f:
-        config = json.load(f)
+        config = "Error with UserProfile"
     return config
 
 
