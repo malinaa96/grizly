@@ -662,7 +662,7 @@ class QFrame:
         return self
 
 
-    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True):
+    def to_rds(self, table, csv_path, schema='', if_exists='fail', sep='\t', use_col_names=True, chunksize=None):
         """
         Writes QFrame table to Redshift database.
 
@@ -693,11 +693,13 @@ class QFrame:
             * append: Insert new values to the existing table
         sep : string, default '\t'
             Separator/delimiter in csv file
+        chunksize : int, default None
+            If specified, return an iterator where chunksize is the number of rows to include in each chunk.
         """
 
         self.get_sql()
 
-        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep)
+        to_csv(self,csv_path, self.sql, engine=self.engine, sep=sep, chunksize=chunksize)
         csv_to_s3(csv_path)
 
         s3_to_rds_qf(self, table, schema=schema, if_exists=if_exists, sep=sep, use_col_names=use_col_names)
