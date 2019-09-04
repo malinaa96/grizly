@@ -2,3 +2,4 @@ pandas
 sqlparse
 ipython
 sqlalchemy
+openpyxl
