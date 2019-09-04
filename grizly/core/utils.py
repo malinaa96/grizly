@@ -6,7 +6,10 @@ from sqlalchemy.pool import NullPool
 
 
 def read_config():
-    json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
+    try:
+        json_path = os.path.join(os.environ['USERPROFILE'], '.grizly', 'etl_config.json')
+    except KeyError:
+        json_path = "Error with UserProfile"
     with open(json_path, 'r') as f:
         config = json.load(f)
     return config
@@ -108,6 +111,9 @@ def copy_table(schema, copy_from, to, engine=None):
 
 
 def set_cwd(*args):
-    cwd = os.environ['USERPROFILE']
+    try:
+        cwd = os.environ['USERPROFILE']
+    except KeyError:
+        cwd = "Error with UserProfile"
     cwd = os.path.join(cwd, *args)
     return cwd
