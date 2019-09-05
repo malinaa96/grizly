@@ -19,13 +19,13 @@ config = read_config()
 os.environ["HTTPS_PROXY"] = config["https"]
 
 
-def columns_to_excel(table, excel_path, schema):
-    """
-    Save columns names from Denodo to excel.
-    """
-    col_names = get_col_name(table, schema)
-    col_names.to_excel(excel_path, index=False)
-    return "Columns saved in excel."
+# def columns_to_excel(table, excel_path, schema):
+#     """
+#     Save columns names from Denodo to excel.
+#     """
+#     col_names = get_col_name(table, schema)
+#     col_names.to_excel(excel_path, index=False)
+#     return "Columns saved in excel."
 
 
 def get_columns(table, schema):
