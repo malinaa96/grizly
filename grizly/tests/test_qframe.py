@@ -50,7 +50,8 @@ customers = {
                 "type": "dim",
                 "as": "Customer"
             }
-        }
+        },
+    "table": "Customers"
     }
 }
 
@@ -72,10 +73,19 @@ def clean_testexpr(testsql):
     testsql = testsql.lower()
     return testsql
 
-def test_save_json_and_read_json():
+
+def test_save_json_and_read_json1():
     q = QFrame().from_dict(deepcopy(customers))
-    q.save_json()
-    q.read_json()
+    q.save_json('qframe_data.json')
+    q.read_json('qframe_data.json')
+    os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
+    assert q.data == customers
+
+
+def test_save_json_and_read_json2():
+    q = QFrame().from_dict(deepcopy(customers))
+    q.save_json('qframe_data.json', 'alias')
+    q.read_json('qframe_data.json', 'alias')
     os.remove(os.path.join(os.getcwd(), 'qframe_data.json'))
     assert q.data == customers
 

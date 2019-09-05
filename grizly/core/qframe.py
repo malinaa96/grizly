@@ -76,17 +76,47 @@ class QFrame:
         self.metaattrs = ["limit", "where", "having"]
 
 
-    def save_json(self, json_path):
+    def validate_data(self, data):
+        """Validate loaded data.
+        
+        Parameters
+        ----------
+        data : dict
+            Dictionary structure holding fields, schema, table, sql information.
+        
+        Returns
+        -------
+        dict
+            Dictionary with validated data.
+        """
+        return _validate_data(data)
+
+
+    def save_json(self, json_path, subquery=''):
         """Saves QFrame.data to json file.
         
         Parameters
         ----------
         json_path : str
-             Path to json file.
+            Path to json file.
+        subquery : str, optional
+            [description], by default ''   
         """
-        json_path = json_path if json_path else os.path.join(os.getcwd(), 'qframe_data.json')
+        if os.path.isfile(json_path):
+            with open(json_path, 'r') as f:
+                json_data = json.load(f)
+                if json_data =="":
+                    json_data = {} 
+        else:
+            json_data = {}
+
+        if subquery != '':
+            json_data[subquery] = self.data
+        else:
+            json_data = self.data
+
         with open(json_path, 'w') as f:
-            json.dump(self.data, f)
+            json.dump(json_data, f)
         print(f"Data saved in {json_path}")
 
 
@@ -103,14 +133,16 @@ class QFrame:
         Returns
         -------
         QFrame
-            QFrame
         """
         with open(json_path, 'r') as f:
             data = json.load(f)
-            if subquery == '':
-                self.data = self.validate_data(data)
+            if data != {}:
+                if subquery == '':
+                    data = self.validate_data(data)
+                else:
+                    data = self.validate_data(data[subquery])
             else:
-                self.data = self.validate_data(data[subquery])
+                self.data = data
         return self
 
 
@@ -125,7 +157,6 @@ class QFrame:
         Returns
         -------
         QFrame
-            QFrame
         """
         self.data = self.validate_data(data)
         return self
@@ -146,7 +177,6 @@ class QFrame:
         Returns
         -------
         QFrame
-            QFrame
         """
         schema, table, columns_qf = read_excel(excel_path, sheet_name, query)
 
@@ -158,30 +188,6 @@ class QFrame:
 
         self.data = self.validate_data(data)
         return self
-
-
-    def validate_data(self, data):
-        # validating fields, need to validate other stuff too
-        fields = data["select"]["fields"]
-
-        for field in fields:
-            for key_attr in fields[field]:
-                if key_attr not in set(self.fieldattrs):
-                    raise AttributeError("Your columns have invalid attributes.")
-
-        for field in fields:
-            if "type" in fields[field]:
-               if fields[field]["type"] not in self.fieldtypes:
-                    raise ValueError("Your columns have invalid types.")
-            else:
-                raise KeyError("Some of your columns don't have types.")
-
-
-        for field in fields:
-            if "as" in fields[field]:
-                fields[field]["as"] = fields[field]["as"].replace(" ", "_")
-
-        return data
 
 
     def create_sql_blocks(self):
@@ -247,7 +253,6 @@ class QFrame:
         self.data["select"]["distinct"] = 1
 
         return self
-
 
 
     def query(self, query, if_exists='append', operator='and' ):
@@ -833,7 +838,6 @@ class QFrame:
         -------
         QFrame
         """
-
         df = self.to_df()
         copy_df_to_excel(df=df, input_excel_path=input_excel_path, output_excel_path=output_excel_path, sheet_name=sheet_name, startrow=startrow, startcol=startcol,index=index, header=header)
 
@@ -874,7 +878,6 @@ class QFrame:
             )
         html_table += "</table>"
         display(HTML(html_table))
-
 
 
 def join(qframes=[], join_type=None, on=None, unique_col=True):
@@ -1065,3 +1068,68 @@ def union(qframes=[], union_type=None):
 
     print("Data unioned successfully.")
     return QFrame(data=data, engine=qframes[0].engine)
+
+
+def _validate_data(data):
+    if data == {}:
+        raise AttributeError("Your data is empty.")
+
+    if "select" not in data:
+        raise AttributeError("Missing 'select' attribute.")
+        
+    select = data["select"]
+
+    if "table" not in select and "join" not in select and "union" not in select and "sq" not in data:
+        raise AttributeError("Missing 'table' attribute.")
+    
+    if "fields" not in select:
+        raise AttributeError("Missing 'fields' attribute.")
+        
+    fields = select["fields"]
+
+
+    for field in fields:
+        for key_attr in fields[field]:
+            if key_attr not in {"type", "as", "group_by", "expression", "select", "custom_type", "order_by"}:
+                raise AttributeError(f"""Field '{field}' has invalid attribute '{key_attr}'. Valid attributes:
+                                        'type', 'as', 'group_by', 'order_by', 'expression', 'select', 'custom_type'""")
+        if "type" in fields[field]:
+            type_ = fields[field]["type"]
+            if type_ not in ["dim", "num"]:
+                raise ValueError(f"""Field '{field}' has invalid value in type: '{type_}'. Valid values: 'dim', 'num'.""")
+        else:
+            raise AttributeError(f"Missing type attribute in field '{field}'.")
+            
+        if "as" in fields[field]:
+            fields[field]["as"] = fields[field]["as"].replace(" ", "_")
+            
+        if "group_by" in fields[field] and fields[field]["group_by"] != "":
+            group_by = fields[field]["group_by"]
+            if group_by.upper() not in ["GROUP", "SUM", "COUNT", "MAX", "MIN", "AVG"]:
+                raise ValueError(f"""Field '{field}' has invalid value in  group_by: '{group_by}'. Valid values: '', 'group', 'sum', 'count', 'max', 'min', 'avg'""")
+            elif group_by.upper() in ["SUM", "COUNT", "MAX", "MIN", "AVG"] and type_ != 'num':
+                raise ValueError(f"Field '{field}' has value '{_type}' in type and value '{group_by}' in group_by. In case of aggregation type should be 'num'.")          
+                
+        if "order_by" in fields[field] and fields[field]["order_by"] != "":
+            order_by = fields[field]["order_by"]
+            if order_by.upper() not in ["DESC", "ASC"]:
+                raise ValueError(f"""Field '{field}' has invalid value in order_by: '{order_by}'. Valid values: '', 'desc', 'asc'""")
+                
+        if "select" in fields[field] and fields[field]["select"] != "":
+            is_selected = fields[field]["select"]
+            if str(int(is_selected)) != "0":
+                raise ValueError(f"""Field '{field}' has invalid value in select: '{is_selected}'.  Valid values: '', '0'""")
+                
+    if "distinct" in select and select["distinct"] != "":
+        distinct = select["distinct"]
+        if str(int(distinct)) != "1":
+            raise ValueError(f"""Distinct attribute has invalid value: '{distinct}'.  Valid values: '', '1'""")
+            
+    if "limit" in select and select["limit"] != "":
+        limit = select["limit"]
+        try:
+            int(limit)
+        except:
+            raise ValueError(f"""Limit attribute has invalid value: '{limit}'.  Valid values: '', integer """)
+            
+    return data

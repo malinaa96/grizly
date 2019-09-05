@@ -19,21 +19,53 @@ config = read_config()
 os.environ["HTTPS_PROXY"] = config["https"]
 
 
-def columns_to_excel(table, excel_path, schema):
+# def columns_to_excel(table, excel_path, schema):
+#     """
+#     Save columns names from Denodo to excel.
+#     """
+#     col_names = get_col_name(table, schema)
+#     col_names.to_excel(excel_path, index=False)
+#     return "Columns saved in excel."
+
+
+def get_columns(table, schema):
+    """Get columns from Denodo view.
+    
+    Parameters
+    ----------
+    table : str
+        Name of table.
+    schema : str
+        Name of schema.
     """
-    Get columns from Denodo table
-    """
-    query = f"""
+    sql = f"""
         SELECT column_name
         FROM get_view_columns()
         WHERE view_name = '{table}'
             AND database_name = '{schema}'
         """
-
     engine = create_engine("mssql+pyodbc://DenodoODBC")
-    col_names = pd.read_sql(query, engine)
-    col_names.to_excel(excel_path, index=False)
-    return "Columns saved in excel."
+
+    try:
+        con = engine.connect().connection
+        cursor = con.cursor()
+        cursor.execute(sql)
+    except:
+        con = engine.connect().connection
+        cursor = con.cursor()
+        cursor.execute(sql)
+
+    col_names = []
+    while True:
+        column = cursor.fetchone()
+        if not column:
+            break
+        col_names.append(column[0])
+
+    cursor.close()
+    con.close()
+
+    return col_names
 
 
 def check_if_exists(table, schema=''):
